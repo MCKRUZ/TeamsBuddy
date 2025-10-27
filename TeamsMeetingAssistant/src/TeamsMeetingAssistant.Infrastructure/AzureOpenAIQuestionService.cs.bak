@@ -1,0 +1,231 @@
+using Azure.AI.OpenAI;
+using Azure;
+using TeamsMeetingAssistant.Core;
+using TeamsMeetingAssistant.Core.Interfaces;
+using Microsoft.Extensions.Logging;
+using System.Text.Json;
+
+namespace TeamsMeetingAssistant.Infrastructure;
+
+public class AzureOpenAIQuestionService : IQuestionGenerationService
+{
+    private readonly AzureOpenAIClient _openAIClient;
+    private readonly string _deploymentName;
+    private readonly ILogger<AzureOpenAIQuestionService> _logger;
+
+    public AzureOpenAIQuestionService(
+        string endpoint,
+        string apiKey,
+        string deploymentName,
+        ILogger<AzureOpenAIQuestionService> logger)
+    {
+        _deploymentName = deploymentName;
+        _logger = logger;
+
+        var uri = new Uri(endpoint);
+        var credential = new AzureKeyCredential(apiKey);
+        _openAIClient = new AzureOpenAIClient(uri, credential);
+    }
+
+    public async Task<List<QuestionSuggestion>> GenerateQuestionsAsync(
+        List<TranscriptSegment> recentTranscript,
+        string meetingContext,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogDebug("Generating questions for {SegmentCount} transcript segments", recentTranscript.Count);
+
+            if (recentTranscript.Count == 0)
+            {
+                return new List<QuestionSuggestion>();
+            }
+
+            // Build transcript context
+            var transcriptText = BuildTranscriptContext(recentTranscript);
+            var systemPrompt = BuildSystemPrompt(meetingContext);
+            var userPrompt = BuildUserPrompt(transcriptText);
+
+            // Generate completion
+            var response = await _openAIClient.GetChatCompletionsAsync(
+                _deploymentName,
+                new ChatCompletionsOptions
+                {
+                    Messages =
+                    {
+                        new ChatRequestSystemMessage(systemPrompt),
+                        new ChatRequestUserMessage(userPrompt)
+                    },
+                    MaxTokens = 800,
+                    Temperature = 0.7f,
+                    ResponseFormat = ChatCompletionsResponseFormat.JsonObject
+                },
+                cancellationToken);
+
+            var completion = response.Value.Choices[0].Message.Content;
+            _logger.LogDebug("OpenAI response: {Response}", completion);
+
+            // Parse the JSON response
+            var suggestions = ParseQuestionSuggestions(completion);
+
+            _logger.LogInformation("Generated {Count} question suggestions", suggestions.Count);
+            return suggestions;
+        }
+        catch (RequestFailedException ex)
+        {
+            _logger.LogError(ex, "Error generating questions with Azure OpenAI. Status: {Status}, Error: {Error}",
+                ex.Status, ex.Message);
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Error parsing OpenAI response as JSON: {Response}", ex.Message);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error generating questions");
+            throw;
+        }
+    }
+
+    private string BuildSystemPrompt(string meetingContext)
+    {
+        return $@"You are an executive meeting coach. Analyze meeting transcripts and suggest insightful questions that will drive productive conversations.
+
+Context: {meetingContext}
+
+Your task is to analyze the recent transcript and generate 2-3 questions that will help move the conversation forward effectively.
+
+Categories of questions:
+1. Clarification - Ask about ambiguous points or unclear statements
+2. Deep-dive - Explore interesting topics or decisions further
+3. Follow-up - Request more details about action items or commitments
+4. Summary - Help synthesize key points or next steps
+
+Return a JSON object with this exact format:
+{{
+  ""questions"": [
+    {{
+      ""question"": ""Your question here"",
+      ""rationale"": ""Why this question is important"",
+      ""category"": ""Clarification|Deep-dive|Follow-up|Summary"",
+      ""confidence"": 0.85
+    }}
+  ]
+}}
+
+Guidelines:
+- Questions should be open-ended and encourage discussion
+- Confidence should be between 0.1 and 1.0
+- Rationale should explain why this question matters
+- Categories must match the exact values above
+- Generate 2-3 questions maximum
+- Focus on the most impactful discussion points";
+    }
+
+    private string BuildUserPrompt(string transcriptText)
+    {
+        return $@"Here is the recent transcript from the meeting:
+
+{transcriptText}
+
+Generate 2-3 insightful questions based on this conversation.";
+    }
+
+    private string BuildTranscriptContext(List<TranscriptSegment> segments)
+    {
+        var transcriptLines = new List<string>();
+
+        // Group by speaker and build readable format
+        var groupedSegments = segments
+            .OrderBy(s => s.Timestamp)
+            .GroupBy(s => s.SpeakerName)
+            .ToList();
+
+        foreach (var group in groupedSegments)
+        {
+            transcriptLines.Add($"{group.Key}:");
+
+            foreach (var segment in group.OrderBy(s => s.Timestamp))
+            {
+                transcriptLines.Add($"  {segment.Content}");
+            }
+
+            transcriptLines.Add("");
+        }
+
+        return string.Join("\n", transcriptLines);
+    }
+
+    private List<QuestionSuggestion> ParseQuestionSuggestions(string jsonContent)
+    {
+        var suggestions = new List<QuestionSuggestion>();
+
+        try
+        {
+            using var document = JsonDocument.Parse(jsonContent);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("questions", out var questionsArray))
+            {
+                foreach (var questionElement in questionsArray.EnumerateArray())
+                {
+                    if (TryParseQuestion(questionElement, out var suggestion))
+                    {
+                        suggestions.Add(suggestion);
+                    }
+                }
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse question suggestions JSON");
+        }
+
+        return suggestions;
+    }
+
+    private bool TryParseQuestion(JsonElement element, out QuestionSuggestion suggestion)
+    {
+        suggestion = null!;
+
+        try
+        {
+            var question = element.GetProperty("question").GetString();
+            var rationale = element.GetProperty("rationale").GetString();
+            var category = element.GetProperty("category").GetString();
+            var confidence = element.GetProperty("confidence").GetSingle();
+
+            if (string.IsNullOrWhiteSpace(question) ||
+                string.IsNullOrWhiteSpace(rationale) ||
+                string.IsNullOrWhiteSpace(category))
+            {
+                return false;
+            }
+
+            var validCategories = new[] { "Clarification", "Deep-dive", "Follow-up", "Summary" };
+            if (!validCategories.Contains(category))
+            {
+                _logger.LogWarning("Invalid question category: {Category}", category);
+                return false;
+            }
+
+            suggestion = new QuestionSuggestion(
+                Guid.NewGuid().ToString(),
+                question,
+                rationale,
+                category,
+                Math.Clamp(confidence, 0.1f, 1.0f),
+                DateTimeOffset.UtcNow
+            );
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error parsing individual question from JSON");
+            return false;
+        }
+    }
+}

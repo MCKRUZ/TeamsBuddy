@@ -1,0 +1,5 @@
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net9.0\TeamsMeetingAssistant.Infrastructure.csproj.AssemblyReference.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net9.0\TeamsMeetingAssistant.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net9.0\TeamsMeetingAssistant.Infrastructure.AssemblyInfoInputs.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net9.0\TeamsMeetingAssistant.Infrastructure.AssemblyInfo.cs
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net9.0\TeamsMeetingAssistant.Infrastructure.csproj.CoreCompileInputs.cache

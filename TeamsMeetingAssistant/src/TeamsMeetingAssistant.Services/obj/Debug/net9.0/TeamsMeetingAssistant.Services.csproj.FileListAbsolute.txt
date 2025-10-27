@@ -1,0 +1,15 @@
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\bin\Debug\net9.0\TeamsMeetingAssistant.Services.deps.json
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\bin\Debug\net9.0\TeamsMeetingAssistant.Services.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\bin\Debug\net9.0\TeamsMeetingAssistant.Services.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\bin\Debug\net9.0\TeamsMeetingAssistant.Core.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\bin\Debug\net9.0\TeamsMeetingAssistant.Core.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMeetingAssistant.Services.csproj.AssemblyReference.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMeetingAssistant.Services.GeneratedMSBuildEditorConfig.editorconfig
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMeetingAssistant.Services.AssemblyInfoInputs.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMeetingAssistant.Services.AssemblyInfo.cs
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMeetingAssistant.Services.csproj.CoreCompileInputs.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMee.0457FA2B.Up2Date
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMeetingAssistant.Services.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\refint\TeamsMeetingAssistant.Services.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\TeamsMeetingAssistant.Services.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Services\obj\Debug\net9.0\ref\TeamsMeetingAssistant.Services.dll

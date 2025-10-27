@@ -1,0 +1,11 @@
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\bin\Debug\net8.0\TeamsMeetingAssistant.Core.deps.json
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\bin\Debug\net8.0\TeamsMeetingAssistant.Core.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\bin\Debug\net8.0\TeamsMeetingAssistant.Core.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.AssemblyInfoInputs.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.AssemblyInfo.cs
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.csproj.CoreCompileInputs.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\refint\TeamsMeetingAssistant.Core.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\ref\TeamsMeetingAssistant.Core.dll
