@@ -1,0 +1,209 @@
+using Microsoft.Graph;
+using Azure.Identity;
+using TeamsMeetingAssistant.Core;
+using TeamsMeetingAssistant.Core.Interfaces;
+using Microsoft.Extensions.Logging;
+using Polly;
+using Polly.Retry;
+
+namespace TeamsMeetingAssistant.Infrastructure;
+
+public class GraphTranscriptService : ITranscriptService
+{
+    private readonly GraphServiceClient _graphClient;
+    private readonly VttTranscriptParser _vttParser;
+    private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
+    private readonly ILogger<GraphTranscriptService> _logger;
+
+    public GraphTranscriptService(
+        string tenantId,
+        string clientId,
+        string clientSecret,
+        ILogger<GraphTranscriptService> logger)
+    {
+        _logger = logger;
+        _vttParser = new VttTranscriptParser();
+
+        var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+        _graphClient = new GraphServiceClient(credential);
+
+        _retryPolicy = Policy<HttpResponseMessage>
+            .Handle<HttpRequestException>()
+            .OrResult(r => r.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            .WaitAndRetryAsync(
+                retryCount: 3,
+                sleepDurationProvider: (retryAttempt, context) =>
+                    TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                onRetry: (outcome, timespan, retryAttempt, context) =>
+                {
+                    _logger.LogWarning(
+                        "Graph API request failed. Retry {RetryAttempt} after {Delay}ms. Error: {Error}",
+                        retryAttempt, timespan.TotalMilliseconds, outcome.Exception?.Message);
+                });
+    }
+
+    public async Task<IEnumerable<TranscriptSegment>> GetNewTranscriptSegmentsAsync(
+        string meetingId,
+        DateTimeOffset since,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogDebug("Fetching transcripts for meeting {MeetingId} since {Since}", meetingId, since);
+
+            // Get transcripts for the meeting
+            var transcripts = await _graphClient.Communications.OnlineMeetings[meetingId]
+                .Transcripts
+                .Request()
+                .GetAsync(cancellationToken);
+
+            var allSegments = new List<TranscriptSegment>();
+
+            foreach (var transcript in transcripts)
+            {
+                // Get transcript content
+                var transcriptContent = await _graphClient.Communications.OnlineMeetings[meetingId]
+                    .Transcripts[transcript.Id]
+                    .Content
+                    .Request()
+                    .GetAsync(cancellationToken);
+
+                // Parse VTT content
+                var segments = _vttParser.Parse(transcriptContent, since);
+
+                // Filter segments newer than the since timestamp
+                var filteredSegments = segments
+                    .Where(s => s.Timestamp > since)
+                    .ToList();
+
+                allSegments.AddRange(filteredSegments);
+            }
+
+            _logger.LogInformation("Found {Count} new transcript segments for meeting {MeetingId}",
+                allSegments.Count, meetingId);
+
+            return allSegments.OrderBy(s => s.Timestamp);
+        }
+        catch (ServiceException ex)
+        {
+            _logger.LogError(ex, "Error fetching transcripts for meeting {MeetingId}. Error: {Error}",
+                meetingId, ex.Error?.Message);
+            throw;
+        }
+    }
+
+    public async Task<MeetingSession> GetMeetingInfoAsync(string meetingId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogDebug("Getting meeting info for {MeetingId}", meetingId);
+
+            var meeting = await _graphClient.Communications.OnlineMeetings[meetingId]
+                .Request()
+                .GetAsync(cancellationToken);
+
+            return new MeetingSession(
+                meetingId,
+                meeting.Participants?.Organizer?.Info?.Identity?.User?.Id ?? "unknown@contoso.com",
+                meeting.StartDateTime ?? DateTimeOffset.UtcNow,
+                meeting.EndDateTime,
+                meeting.IsTranscriptionEnabled ?? false,
+                null,
+                DateTimeOffset.UtcNow,
+                MeetingStatus.Pending
+            );
+        }
+        catch (ServiceException ex)
+        {
+            _logger.LogError(ex, "Error getting meeting info for {MeetingId}. Error: {Error}",
+                meetingId, ex.Error?.Message);
+            throw;
+        }
+    }
+
+    public async Task<Subscription> SubscribeToTranscriptChangesAsync(
+        string meetingId,
+        string webhookUrl,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogDebug("Creating subscription for meeting {MeetingId}", meetingId);
+
+            var subscription = new Microsoft.Graph.Subscription
+            {
+                ChangeType = "updated",
+                NotificationUrl = webhookUrl,
+                Resource = $"/communications/onlineMeetings/{meetingId}/transcripts",
+                ExpirationDateTime = DateTimeOffset.UtcNow.AddHours(1),
+                ClientState = Guid.NewGuid().ToString()
+            };
+
+            var createdSubscription = await _graphClient.Subscriptions
+                .Request()
+                .AddAsync(subscription, cancellationToken);
+
+            _logger.LogInformation("Created subscription {SubscriptionId} for meeting {MeetingId}",
+                createdSubscription.Id, meetingId);
+
+            return new Subscription(
+                createdSubscription.Id!,
+                createdSubscription.ExpirationDateTime,
+                createdSubscription.Resource!,
+                createdSubscription.ChangeType!
+            );
+        }
+        catch (ServiceException ex)
+        {
+            _logger.LogError(ex, "Error creating subscription for meeting {MeetingId}. Error: {Error}",
+                meetingId, ex.Error?.Message);
+            throw;
+        }
+    }
+
+    public async Task RenewSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogDebug("Renewing subscription {SubscriptionId}", subscriptionId);
+
+            var subscription = await _graphClient.Subscriptions[subscriptionId]
+                .Request()
+                .GetAsync(cancellationToken);
+
+            subscription.ExpirationDateTime = DateTimeOffset.UtcNow.AddHours(1);
+
+            await _graphClient.Subscriptions[subscriptionId]
+                .Request()
+                .UpdateAsync(subscription, cancellationToken);
+
+            _logger.LogInformation("Renewed subscription {SubscriptionId}", subscriptionId);
+        }
+        catch (ServiceException ex)
+        {
+            _logger.LogError(ex, "Error renewing subscription {SubscriptionId}. Error: {Error}",
+                subscriptionId, ex.Error?.Message);
+            throw;
+        }
+    }
+
+    public async Task UnsubscribeAsync(string subscriptionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogDebug("Deleting subscription {SubscriptionId}", subscriptionId);
+
+            await _graphClient.Subscriptions[subscriptionId]
+                .Request()
+                .DeleteAsync(cancellationToken);
+
+            _logger.LogInformation("Deleted subscription {SubscriptionId}", subscriptionId);
+        }
+        catch (ServiceException ex)
+        {
+            _logger.LogError(ex, "Error deleting subscription {SubscriptionId}. Error: {Error}",
+                subscriptionId, ex.Error?.Message);
+            throw;
+        }
+    }
+}

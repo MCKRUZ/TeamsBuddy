@@ -1,0 +1,6 @@
+@TeamsMeetingAssistant.Api_HostAddress = http://localhost:5211
+
+GET {{TeamsMeetingAssistant.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

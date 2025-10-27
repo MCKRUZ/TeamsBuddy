@@ -1,0 +1,15 @@
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.csproj.AssemblyReference.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.AssemblyInfoInputs.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.AssemblyInfo.cs
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.csproj.CoreCompileInputs.cache
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.deps.json
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Core.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Core.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMee.C72E57B1.Up2Date
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\refint\TeamsMeetingAssistant.Infrastructure.dll
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.pdb
+C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\ref\TeamsMeetingAssistant.Infrastructure.dll
