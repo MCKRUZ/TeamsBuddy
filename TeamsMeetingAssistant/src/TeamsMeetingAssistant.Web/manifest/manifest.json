@@ -1,0 +1,59 @@
+{
+    "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+    "manifestVersion": "1.17",
+    "version": "1.0.0",
+    "id": "e26bc97a-9563-4a82-b5b0-1a57aa3715ed",
+    "developer": {
+        "name": "Teams Meeting Assistant",
+        "websiteUrl": "https://lv3nz16d-7251.use.devtunnels.ms/",
+        "privacyUrl": "https://lv3nz16d-7251.use.devtunnels.ms/privacy",
+        "termsOfUseUrl": "https://lv3nz16d-7251.use.devtunnels.ms/termsofuse"
+    },
+    "icons": {
+        "color": "icon-color.png",
+        "outline": "icon-outline.png"
+    },
+    "name": {
+        "short": "Meeting Assistant",
+        "full": "Teams Meeting Assistant"
+    },
+    "description": {
+        "short": "Provides real-time question suggestions during Teams meetings.",
+        "full": "This application analyzes the meeting transcript in real-time and suggests relevant questions to help facilitate the discussion and ensure all key points are covered."
+    },
+    "accentColor": "#FFFFFF",
+    "configurableTabs": [
+        {
+            "configurationUrl": "https://lv3nz16d-7251.use.devtunnels.ms/meeting",
+            "scopes": [
+                "groupChat"
+            ],
+            "context": [
+                "meetingSidePanel"
+            ]
+        }
+    ],
+    "staticTabs": [
+        {
+            "entityId": "meeting-assistant",
+            "name": "Meeting Assistant",
+            "contentUrl": "https://lv3nz16d-7251.use.devtunnels.ms/meeting",
+            "websiteUrl": "https://lv3nz16d-7251.use.devtunnels.ms/meeting",
+            "scopes": [
+                "personal"
+            ]
+        }
+    ],
+    "bots": [],
+    "connectors": [],
+    "composeExtensions": [],
+    "permissions": [
+        "identity",
+        "messageTeamMembers"
+    ],
+    "validDomains": [
+        "lv3nz16d-7251.use.devtunnels.ms"
+    ],
+    "showLoadingIndicator": false,
+    "isFullScreen": false
+}

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using TeamsMeetingAssistant.Core;
 using TeamsMeetingAssistant.Core.Interfaces;
+using TeamsMeetingAssistant.Infrastructure;
 
 namespace TeamsMeetingAssistant.Api.Controllers;
 
@@ -14,6 +15,10 @@ public class WebhookController : ControllerBase
     private readonly IQuestionGenerationService _questionService;
     private readonly IMeetingSessionStore _sessionStore;
     private readonly ILogger<WebhookController> _logger;
+    
+    // Note: Now using SHARED deduplication from MeetingController
+    // Track processed transcript IDs per meeting to avoid duplicate webhook processing
+    private static readonly Dictionary<string, HashSet<string>> _processedTranscriptIds = new();
 
     public WebhookController(
         ITranscriptService transcriptService,
@@ -37,7 +42,7 @@ public class WebhookController : ControllerBase
         // Handle Graph API subscription validation
         if (!string.IsNullOrEmpty(validationToken))
         {
-            _logger.LogInformation("Validating webhook subscription");
+            _logger.LogInformation("Validating webhook subscription with token: {Token}", validationToken);
             return Ok(validationToken);
         }
 
@@ -47,7 +52,8 @@ public class WebhookController : ControllerBase
             using var reader = new StreamReader(Request.Body);
             var json = await reader.ReadToEndAsync(cancellationToken);
 
-            _logger.LogDebug("Received webhook notification: {Notification}", json);
+            _logger.LogInformation("Received webhook notification");
+            _logger.LogDebug("Webhook payload: {Notification}", json);
 
             var notifications = JsonSerializer.Deserialize<ChangeNotificationCollection>(json, new JsonSerializerOptions
             {
@@ -59,6 +65,8 @@ public class WebhookController : ControllerBase
                 _logger.LogWarning("Invalid notification payload received");
                 return BadRequest("Invalid notification payload");
             }
+
+            _logger.LogInformation("Processing {Count} webhook notification(s)", notifications.Value.Count);
 
             // Process each notification
             foreach (var notification in notifications.Value)
@@ -81,60 +89,135 @@ public class WebhookController : ControllerBase
     {
         try
         {
-            // Extract meeting ID from resource path
+            // Log the notification type
+            _logger.LogInformation("Webhook notification - ChangeType: {ChangeType}, Resource: {Resource}",
+                notification.ChangeType, notification.Resource);
+
+            // Extract meeting ID and transcript ID from resource path
             // e.g., /communications/onlineMeetings/{meetingId}/transcripts/{transcriptId}
             var parts = notification.Resource?.Split('/') ?? Array.Empty<string>();
-            if (parts.Length < 5)
+            if (parts.Length < 6)
             {
                 _logger.LogWarning("Invalid resource path in notification: {Resource}", notification.Resource);
                 return;
             }
 
             var meetingId = parts[3];
+            var transcriptId = parts[5];
 
-            _logger.LogDebug("Processing notification for meeting {MeetingId}", meetingId);
+            // Check if this is a "created" notification (new transcript file)
+            if (notification.ChangeType?.ToLower() != "created")
+            {
+                _logger.LogDebug("Ignoring non-created notification: {ChangeType} for transcript {TranscriptId}",
+                    notification.ChangeType, transcriptId);
+                return;
+            }
+
+            _logger.LogInformation("New transcript created: {TranscriptId} for meeting {MeetingId}",
+                transcriptId, meetingId);
+
+            // Check if we've already processed this transcript ID (webhook-level deduplication)
+            if (!_processedTranscriptIds.TryGetValue(meetingId, out var processedIds))
+            {
+                processedIds = new HashSet<string>();
+                _processedTranscriptIds[meetingId] = processedIds;
+            }
+
+            if (processedIds.Contains(transcriptId))
+            {
+                _logger.LogDebug("Transcript {TranscriptId} already processed for meeting {MeetingId}, skipping",
+                    transcriptId, meetingId);
+                return;
+            }
+
+            // Mark this transcript as processed (webhook-level)
+            processedIds.Add(transcriptId);
 
             var session = await _sessionStore.GetAsync(meetingId);
             if (session == null || session.Status != MeetingStatus.Active)
             {
-                _logger.LogDebug("No active session found for meeting {MeetingId}", meetingId);
+                _logger.LogDebug("No active session found for meeting {MeetingId}, skipping notification", meetingId);
                 return;
             }
 
-            // Fetch and process new transcript segments
-            var newSegments = await _transcriptService.GetNewTranscriptSegmentsAsync(
+            _logger.LogInformation("Fetching segments from new transcript {TranscriptId}",
+                transcriptId);
+
+            // Fetch segments from the entire meeting (Graph API will return all transcripts)
+            // But filter by timestamp to only get new ones
+            var allSegments = await _transcriptService.GetNewTranscriptSegmentsAsync(
                 meetingId,
                 session.LastProcessedTime,
                 cancellationToken);
 
-            _logger.LogInformation("Found {Count} new segments for meeting {MeetingId}",
-                newSegments.Count(), meetingId);
+            var segmentsList = allSegments.ToList();
+            
+            if (!segmentsList.Any())
+            {
+                _logger.LogDebug("No new segments found in transcript {TranscriptId}", transcriptId);
+                return;
+            }
 
-            foreach (var segment in newSegments)
+            // Deduplicate segments using SHARED deduplication cache (segment-level)
+            var processedSegmentIds = MeetingController.ProcessedSegmentIds.GetOrAdd(meetingId, _ => new HashSet<string>());
+            List<TranscriptSegment> actuallyNewSegments;
+            
+            lock (processedSegmentIds)
+            {
+                actuallyNewSegments = segmentsList
+                    .Where(s => processedSegmentIds.Add(s.Id)) // Only segments we haven't seen
+                    .ToList();
+            }
+
+            if (!actuallyNewSegments.Any())
+            {
+                _logger.LogDebug("All {Count} segments from transcript {TranscriptId} already processed", 
+                    segmentsList.Count, transcriptId);
+                return;
+            }
+
+            _logger.LogInformation("Found {Count} NEW segment(s) from transcript {TranscriptId} (webhook)",
+                actuallyNewSegments.Count, transcriptId);
+
+            // Send segments to SignalR clients
+            foreach (var segment in actuallyNewSegments)
             {
                 await _signalRService.SendTranscriptUpdateAsync(meetingId, segment);
+                _logger.LogDebug("Sent segment via SignalR: {Speaker}: {Content}", 
+                    segment.SpeakerName, 
+                    segment.Content.Length > 50 ? segment.Content.Substring(0, 50) + "..." : segment.Content);
             }
 
-            if (newSegments.Any())
+            // Send status update to clients
+            await _signalRService.NotifyMeetingStatusAsync(meetingId, 
+                $"Received {actuallyNewSegments.Count} new transcript segment(s) via webhook");
+
+            // Generate questions if we have enough segments
+            if (actuallyNewSegments.Count >= 3)
             {
-                // Generate questions if we have enough segments
-                if (newSegments.Count() >= 3)
-                {
-                    var questions = await _questionService.GenerateQuestionsAsync(
-                        newSegments.ToList(),
-                        session.OrganizerEmail,
-                        cancellationToken);
+                _logger.LogInformation("?? Generating AI questions for {Count} segments", actuallyNewSegments.Count);
+                
+                var questions = await _questionService.GenerateQuestionsAsync(
+                    actuallyNewSegments,
+                    session.OrganizerEmail,
+                    cancellationToken);
 
+                if (questions.Any())
+                {
                     await _signalRService.SendQuestionSuggestionsAsync(meetingId, questions);
+                    _logger.LogInformation("Sent {Count} AI question(s) to clients", questions.Count);
                 }
-
-                // Update session
-                var updatedSession = session with
-                {
-                    LastProcessedTime = newSegments.Max(s => s.Timestamp)
-                };
-                await _sessionStore.AddOrUpdateAsync(updatedSession);
             }
+
+            // Update session with latest processed time
+            var updatedSession = session with
+            {
+                LastProcessedTime = actuallyNewSegments.Max(s => s.Timestamp)
+            };
+            await _sessionStore.AddOrUpdateAsync(updatedSession);
+
+            _logger.LogInformation("Updated session last processed time to {Time}", 
+                updatedSession.LastProcessedTime);
         }
         catch (Exception ex)
         {

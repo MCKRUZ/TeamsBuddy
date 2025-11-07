@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teams App Icon Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .icon-preview { margin: 20px 0; text-align: center; }
+        canvas { border: 2px solid #ccc; margin: 10px; }
+        button { padding: 10px 20px; margin: 10px; background: #0078d4; color: white; border: none; cursor: pointer; }
+        button:hover { background: #106ebe; }
+    </style>
+</head>
+<body>
+    <h1>Teams Meeting Assistant - Icon Generator</h1>
+    
+    <div class="icon-preview">
+        <h2>Color Icon (192x192)</h2>
+        <canvas id="colorIcon" width="192" height="192"></canvas>
+        <br>
+        <button onclick="generateColorIcon()">Generate Color Icon</button>
+        <button onclick="downloadCanvas('colorIcon', 'icon-color.png')">Download</button>
+    </div>
+    
+    <div class="icon-preview">
+        <h2>Outline Icon (32x32)</h2>
+        <canvas id="outlineIcon" width="32" height="32"></canvas>
+        <br>
+        <button onclick="generateOutlineIcon()">Generate Outline Icon</button>
+        <button onclick="downloadCanvas('outlineIcon', 'icon-outline.png')">Download</button>
+    </div>
+
+    <script>
+        function generateColorIcon() {
+            const canvas = document.getElementById('colorIcon');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, 192, 192);
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 192, 192);
+            gradient.addColorStop(0, '#0078d4');
+            gradient.addColorStop(1, '#106ebe');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 192, 192);
+            
+            // Icon text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 64px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('?', 96, 80);
+            
+            // Subtitle
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('Meeting', 96, 130);
+            ctx.fillText('Assistant', 96, 160);
+        }
+        
+        function generateOutlineIcon() {
+            const canvas = document.getElementById('outlineIcon');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas (transparent background)
+            ctx.clearRect(0, 0, 32, 32);
+            
+            // Draw question mark outline
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeText('?', 16, 16);
+        }
+        
+        function downloadCanvas(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // Generate icons on page load
+        window.onload = function() {
+            generateColorIcon();
+            generateOutlineIcon();
+        };
+    </script>
+</body>
+</html>

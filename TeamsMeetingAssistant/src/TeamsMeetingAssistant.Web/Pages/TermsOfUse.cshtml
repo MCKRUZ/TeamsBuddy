@@ -1,0 +1,45 @@
+@page "/termsofuse"
+@{
+    ViewData["Title"] = "Terms of Use";
+}
+
+<div class="container mt-4">
+    <h1>Terms of Use</h1>
+    <p><strong>Last updated:</strong> @DateTime.Now.ToString("MMMM dd, yyyy")</p>
+    
+    <h2>Acceptance of Terms</h2>
+    <p>By using Teams Meeting Assistant, you agree to these Terms of Use. If you do not agree, please do not use the service.</p>
+    
+    <h2>Service Description</h2>
+    <p>Teams Meeting Assistant is a Microsoft Teams application that:</p>
+    <ul>
+        <li>Analyzes meeting transcripts in real-time</li>
+        <li>Generates AI-powered question suggestions</li>
+        <li>Helps facilitate more productive meetings</li>
+    </ul>
+    
+    <h2>User Responsibilities</h2>
+    <p>Users are responsible for:</p>
+    <ul>
+        <li>Ensuring appropriate use of the service during meetings</li>
+        <li>Respecting privacy and confidentiality of meeting content</li>
+        <li>Following their organization's policies regarding meeting recordings and transcripts</li>
+    </ul>
+    
+    <h2>Limitations</h2>
+    <p>The service is provided "as is" and:</p>
+    <ul>
+        <li>AI-generated suggestions are for assistance only and should not replace human judgment</li>
+        <li>The accuracy of suggestions depends on transcript quality</li>
+        <li>The service requires Teams meeting transcription to be enabled</li>
+    </ul>
+    
+    <h2>Privacy</h2>
+    <p>Your privacy is important to us. Please review our <a href="/privacy">Privacy Policy</a> for information about how we handle your data.</p>
+    
+    <h2>Changes to Terms</h2>
+    <p>We may update these Terms of Use from time to time. Continued use of the service constitutes acceptance of any changes.</p>
+    
+    <h2>Contact</h2>
+    <p>For questions about these Terms of Use, please contact your Teams administrator.</p>
+</div>

@@ -1,0 +1,568 @@
+﻿@page "/meeting"
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+@inject IHttpClientFactory HttpClientFactory
+@inject IConfiguration Configuration
+@inject ILogger<Meeting> _logger
+
+<PageTitle>Teams Meeting Assistant</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <h3>Live Transcript</h3>
+            <div class="transcript-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
+                @if (transcriptSegments.Any())
+                {
+                    @foreach (var segment in transcriptSegments)
+                    {
+                        <div class="transcript-segment mb-2">
+                            <strong>@segment.SpeakerName (@segment.Timestamp.ToString("HH:mm:ss")):</strong>
+                            <p>@segment.Content</p>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted">No transcript available yet. Start monitoring a meeting to see live updates.</p>
+                }
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <h3>Suggested Questions</h3>
+            <div class="questions-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
+                @if (questionSuggestions.Any())
+                {
+                    @foreach (var question in questionSuggestions)
+                    {
+                        <div class="question-suggestion mb-3 p-2" style="border-left: 3px solid #0078d4;">
+                            <p><strong>@question.Question</strong></p>
+                            <small class="text-muted">@question.Context | Confidence: @((question.Confidence * 100).ToString("F0"))%</small>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted">Question suggestions will appear here during the meeting.</p>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="meeting-controls">
+                <!-- Connection Status -->
+                <div class="alert alert-light mb-3">
+                    <small>
+                        <strong>Connection Status:</strong> 
+                        <span class="@GetConnectionStatusClass()">
+                            @GetConnectionStatusText()
+                        </span>
+                    </small>
+                </div>
+
+                <div class="input-group mb-3">
+                    <input @bind="meetingId" class="form-control" placeholder="Enter Teams Meeting URL or ID" />
+                    <input @bind="userId" class="form-control" placeholder="Enter User ID (optional)" />
+                    <button class="btn btn-primary" @onclick="StartMonitoring" disabled="@isMonitoring">
+                        @if (isMonitoring)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Start Monitoring
+                    </button>
+                    <button class="btn btn-secondary" @onclick="StopMonitoring" disabled="@(!isMonitoring)">
+                        Stop Monitoring
+                    </button>
+                    <button class="btn btn-info" @onclick="TestSignalR" disabled="@string.IsNullOrWhiteSpace(currentMeetingId)">
+                        Test SignalR
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="RetrySignalRConnection">
+                        Retry Connection
+                    </button>
+                    <button class="btn btn-outline-primary" @onclick="TestApiConnection">
+                        Test API
+                    </button>
+                    <button class="btn btn-outline-info" @onclick="SimpleTest">
+                        Simple Test
+                    </button>
+                </div>
+                
+                <!-- HTML-only test button (should work even if Blazor is broken) -->
+                <div class="mb-3">
+                    <button type="button" class="btn btn-warning" onclick="testHtmlButton()">
+                        HTML Test (No Blazor)
+                    </button>
+                    <span id="htmlTestResult" class="ms-2"></span>
+                </div>
+                
+                @if (!string.IsNullOrEmpty(statusMessage))
+                {
+                    <div class="alert @(statusMessage.Contains("Error") || statusMessage.Contains("failed") ? "alert-danger" : "alert-info")">
+                        @statusMessage
+                    </div>
+                }
+                
+                @if (!string.IsNullOrEmpty(currentMeetingId))
+                {
+                    <div class="alert alert-success">
+                        <strong>Monitoring:</strong> @currentMeetingId
+                        @if (!string.IsNullOrEmpty(currentMeetingUrl))
+                        {
+                            <br/><small>URL: @currentMeetingUrl</small>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private HubConnection? hubConnection;
+    private List<TranscriptSegment> transcriptSegments = new();
+    private List<QuestionSuggestion> questionSuggestions = new();
+    private string meetingId = "";
+    private string userId = ""; // In real app, get from auth context
+    private string currentMeetingId = "";
+    private string currentMeetingUrl = "";
+    private bool isMonitoring = false;
+    private string statusMessage = "Page loaded - ready for testing";
+    private bool isInteractive = false;
+
+    protected override void OnInitialized()
+    {
+        statusMessage = "SignalR disabled for testing - ready for API calls";
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isInteractive = true;
+            await JSRuntime.InvokeVoidAsync("console.log", "=== Component is now interactive ===");
+            statusMessage = "Component is now interactive - buttons should work";
+            StateHasChanged();
+        }
+    }
+
+    private async Task TestApiConnection()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "=== TEST API BUTTON CLICKED ===");
+
+            statusMessage = "Testing API connection...";
+            StateHasChanged();
+
+            var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
+            var baseAddress = httpClient.BaseAddress?.ToString() ?? "No base address set";
+            statusMessage = $"Testing connection to: {baseAddress}";
+            StateHasChanged();
+
+            await JSRuntime.InvokeVoidAsync("console.log", $"Testing endpoint: {baseAddress}");
+
+            var response = await httpClient.GetAsync("/");
+            await JSRuntime.InvokeVoidAsync("console.log", $"Response status: {response.StatusCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                statusMessage = $"API connection successful: {content}";
+                await JSRuntime.InvokeVoidAsync("console.log", $"Success! Response: {content}");
+            }
+            else
+            {
+                statusMessage = $"API connection failed with status: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"API connection failed: {ex.Message}";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error: {ex.Message}");
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SimpleTest()
+    {
+        statusMessage = $"Simple test clicked at {DateTime.Now:HH:mm:ss}";
+        StateHasChanged();
+
+        await JSRuntime.InvokeVoidAsync("console.log", "Simple test button was clicked");
+
+        var apiBaseUrl = Configuration["ApiBaseUrl"];
+        var skipSignalR = Configuration["SkipSignalR"];
+        statusMessage += $" | API URL: {apiBaseUrl} | Skip SignalR: {skipSignalR}";
+    }
+
+    private async Task StartMonitoring()
+    {
+        if (string.IsNullOrWhiteSpace(meetingId))
+        {
+            statusMessage = "Please enter a meeting URL or ID";
+            return;
+        }
+
+        isMonitoring = true;
+        statusMessage = "Starting monitoring...";
+        StateHasChanged();
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", $"Starting monitoring for: {meetingId}, userId: {userId}");
+            
+            var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
+            var requestBody = new 
+            { 
+                meetingId = meetingId, 
+                UserId = string.IsNullOrWhiteSpace(userId) ? null : userId,
+                UseWebhooks = true,
+                PollingIntervalSeconds = 5
+            };
+            
+            await JSRuntime.InvokeVoidAsync("console.log", $"Sending request to: {httpClient.BaseAddress}/api/meeting/start");
+            
+            var response = await httpClient.PostAsJsonAsync("/api/meeting/start", requestBody);
+            
+            await JSRuntime.InvokeVoidAsync("console.log", $"API Response: {response.StatusCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<StartMonitoringResponse>();
+                
+                if (result != null)
+                {
+                    currentMeetingId = result.MeetingId;
+                    currentMeetingUrl = result.MeetingUrl ?? "";
+                    
+                    statusMessage = $"{result.Message}";
+                    await JSRuntime.InvokeVoidAsync("console.log", $"Meeting monitoring started: {result.MeetingId}");
+                    
+                    // Now that monitoring is started, enable the custom SignalR connection
+                    await InitializeCustomSignalR();
+                }
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                statusMessage = $"Error starting monitoring (Status: {response.StatusCode}): {error}";
+                await JSRuntime.InvokeVoidAsync("console.error", $"API Error: {error}");
+                isMonitoring = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Exception: {ex.Message}");
+            isMonitoring = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task StopMonitoring()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "Stopping meeting monitoring...");
+            
+            var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
+            var requestBody = new { MeetingId = currentMeetingId };
+            var response = await httpClient.PostAsJsonAsync("/api/meeting/stop", requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "Monitoring stopped";
+                await JSRuntime.InvokeVoidAsync("console.log", "Meeting monitoring stopped successfully");
+                
+                // Clear transcript and questions
+                transcriptSegments.Clear();
+                questionSuggestions.Clear();
+                currentMeetingId = "";
+                currentMeetingUrl = "";
+                
+                // Disconnect custom SignalR
+                if (hubConnection != null)
+                {
+                    await hubConnection.DisposeAsync();
+                    hubConnection = null;
+                    await JSRuntime.InvokeVoidAsync("console.log", "Custom SignalR connection disposed");
+                }
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                statusMessage = $"Error stopping monitoring: {error}";
+                await JSRuntime.InvokeVoidAsync("console.error", $"Stop monitoring error: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Stop monitoring exception: {ex.Message}");
+        }
+
+        isMonitoring = false;
+        StateHasChanged();
+    }
+
+    private async Task TestSignalR()
+    {
+        if (string.IsNullOrWhiteSpace(currentMeetingId))
+        {
+            statusMessage = "Please start monitoring a meeting first";
+            return;
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "Testing custom SignalR connection...");
+
+            // First check if we have a connection
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "SignalR is connected, joining meeting group...");
+                await hubConnection.InvokeAsync("JoinMeeting", currentMeetingId);
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("console.warn", $"SignalR not connected (State: {hubConnection?.State})");
+                statusMessage = $"SignalR not connected (State: {hubConnection?.State}) - cannot test";
+                StateHasChanged();
+                return;
+            }
+
+            // Call the test endpoint on the API
+            var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
+            var response = await httpClient.PostAsync($"/api/meeting/test-signalr/{currentMeetingId}", null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "✅ SignalR test message sent - check for incoming message";
+                await JSRuntime.InvokeVoidAsync("console.log", "SignalR test message sent successfully");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                statusMessage = $"❌ Failed to send test message: {error}";
+                await JSRuntime.InvokeVoidAsync("console.error", $"Test SignalR error: {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ SignalR test error: {ex.Message}";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Test SignalR exception: {ex.Message}");
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task RetrySignalRConnection()
+    {
+        await JSRuntime.InvokeVoidAsync("console.log", "RetrySignalRConnection clicked");
+        statusMessage = "✅ Retry Connection clicked - method executing";
+        StateHasChanged();
+    }
+
+    private string GetConnectionStatusText()
+    {
+        if (hubConnection == null)
+        {
+            return "Not initialized";
+        }
+        
+        return hubConnection.State switch
+        {
+            HubConnectionState.Connected => "Connected to API",
+            HubConnectionState.Connecting => "Connecting to API...",
+            HubConnectionState.Reconnecting => "Reconnecting to API...",
+            HubConnectionState.Disconnected => "Disconnected from API",
+            _ => "Unknown"
+        };
+    }
+
+    private string GetConnectionStatusClass()
+    {
+        if (hubConnection == null)
+        {
+            return "text-muted";
+        }
+        
+        return hubConnection.State switch
+        {
+            HubConnectionState.Connected => "text-success",
+            HubConnectionState.Connecting => "text-warning",
+            HubConnectionState.Reconnecting => "text-warning", 
+            HubConnectionState.Disconnected => "text-danger",
+            _ => "text-muted"
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    private async Task InitializeCustomSignalR()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "Initializing custom SignalR connection to API...");
+            
+            // Only initialize if SkipSignalR is not true
+            var skipSignalR = Configuration["SkipSignalR"] == "true";
+            if (skipSignalR)
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "Custom SignalR disabled by configuration");
+                return;
+            }
+
+            var apiBaseUrl = Configuration["ApiBaseUrl"] ?? "https://localhost:7128";
+            await JSRuntime.InvokeVoidAsync("console.log", $"Connecting to SignalR hub at: {apiBaseUrl}/transcripthub");
+            
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl($"{apiBaseUrl}/transcripthub", options =>
+                {
+                    // Use LongPolling for better reliability with dev tunnels
+                    options.SkipNegotiation = false;
+                    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+                    options.CloseTimeout = TimeSpan.FromSeconds(10);
+                })
+                .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10) })
+                .Build();
+
+            // Handle new transcript segments
+            hubConnection.On<TranscriptSegment>("NewTranscript", async (segment) =>
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", $"Received transcript: {segment.SpeakerName}: {segment.Content}");
+                transcriptSegments.Add(segment);
+                await InvokeAsync(StateHasChanged);
+            });
+
+            // Handle question suggestions
+            hubConnection.On<List<QuestionSuggestion>>("QuestionSuggestions", async (suggestions) =>
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", $"Received {suggestions.Count} question suggestions");
+                questionSuggestions.Clear();
+                questionSuggestions.AddRange(suggestions);
+                await InvokeAsync(StateHasChanged);
+            });
+
+            // Handle meeting status updates
+            hubConnection.On<string>("MeetingStatus", async (status) =>
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", $"Meeting status: {status}");
+                statusMessage = $"Meeting status: {status}";
+                await InvokeAsync(StateHasChanged);
+            });
+
+            // Connection event handlers
+            hubConnection.Closed += async (error) =>
+            {
+                if (error != null)
+                {
+                    await JSRuntime.InvokeVoidAsync("console.warn", $"Custom SignalR connection lost: {error.Message}");
+                    statusMessage = $"SignalR connection lost: {error.Message}";
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("console.log", "Custom SignalR connection closed normally");
+                    statusMessage = "SignalR connection closed";
+                }
+                await InvokeAsync(StateHasChanged);
+            };
+
+            hubConnection.Reconnected += async (connectionId) =>
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", $"Custom SignalR reconnected: {connectionId}");
+                statusMessage = "SignalR reconnected successfully";
+                await InvokeAsync(StateHasChanged);
+                
+                // Rejoin the meeting group after reconnection
+                if (!string.IsNullOrWhiteSpace(currentMeetingId))
+                {
+                    await hubConnection.InvokeAsync("JoinMeeting", currentMeetingId);
+                }
+            };
+
+            hubConnection.Reconnecting += async (error) =>
+            {
+                await JSRuntime.InvokeVoidAsync("console.warn", $"Custom SignalR reconnecting: {error?.Message}");
+                statusMessage = "SignalR reconnecting...";
+                await InvokeAsync(StateHasChanged);
+            };
+
+            // Connect to the hub
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            await hubConnection.StartAsync(cts.Token);
+            
+            // Join the meeting group
+            await hubConnection.InvokeAsync("JoinMeeting", currentMeetingId);
+            
+            await JSRuntime.InvokeVoidAsync("console.log", "Custom SignalR connected and joined meeting group");
+            statusMessage = "Connected to SignalR hub and joined meeting";
+            StateHasChanged();
+        }
+        catch (OperationCanceledException)
+        {
+            await JSRuntime.InvokeVoidAsync("console.warn", "Custom SignalR connection timed out");
+            statusMessage = "SignalR connection timed out - continuing without real-time updates";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Custom SignalR connection failed: {ex.Message}");
+            statusMessage = $"SignalR connection failed: {ex.Message} - continuing without real-time updates";
+            StateHasChanged();
+        }
+    }
+
+    // Model classes
+    public class TranscriptSegment
+    {
+        public string Id { get; set; } = "";
+        public string SpeakerName { get; set; } = "";
+        public string SpeakerId { get; set; } = "";
+        public string Content { get; set; } = "";  // Changed from Text to Content
+        public DateTimeOffset Timestamp { get; set; }
+        public TimeSpan StartTime { get; set; }
+        public TimeSpan EndTime { get; set; }
+    }
+
+    public class QuestionSuggestion
+    {
+        public string Id { get; set; } = "";
+        public string Question { get; set; } = "";
+        public string Context { get; set; } = "";
+        public string Category { get; set; } = "";
+        public float Confidence { get; set; }
+        public DateTimeOffset GeneratedAt { get; set; }
+    }
+    
+    public class StartMonitoringResponse
+    {
+        public string MeetingId { get; set; } = "";
+        public string? MeetingUrl { get; set; }
+        public string Status { get; set; } = "";
+        public int PollingInterval { get; set; }
+        public string UserId { get; set; } = "";
+        public int InitialTranscriptCount { get; set; }
+        public WebhookInfo Webhooks { get; set; } = new();
+        public string Message { get; set; } = "";
+    }
+
+    public class WebhookInfo
+    {
+        public bool Enabled { get; set; }
+        public string? SubscriptionId { get; set; }
+    }
+}

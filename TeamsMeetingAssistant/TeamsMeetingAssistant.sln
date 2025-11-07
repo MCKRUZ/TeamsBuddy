@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeamsMeetingAssistant.Core", "src\TeamsMeetingAssistant.Core\TeamsMeetingAssistant.Core.csproj", "{87AEE9FC-443E-408B-A492-5EAEC7D615C2}"
 EndProject
@@ -125,5 +128,8 @@ Global
 		{1040BFDF-19AA-4B9D-8DC1-09CFF64F42F0} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{3CA71929-E430-4AC3-A257-827B4CFE0E39} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{A1E340BF-74AA-4908-8AE4-8D50C67C1F9A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1F11A0F0-087E-46CB-84D2-196DB46292A7}
 	EndGlobalSection
 EndGlobal

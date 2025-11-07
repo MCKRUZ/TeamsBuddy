@@ -46,21 +46,18 @@ public class MockGraphTranscriptService : ITranscriptService
         return mockSegments;
     }
 
-    public async Task<MeetingSession> GetMeetingInfoAsync(string meetingId, CancellationToken cancellationToken)
+    public async Task<MeetingInfo> GetMeetingInfoAsync(string meetingId, string userId, CancellationToken cancellationToken)
     {
         _logger.LogInformation("MOCK: Getting meeting info for {MeetingId}", meetingId);
 
         await Task.Delay(50, cancellationToken);
 
-        return new MeetingSession(
+        return new MeetingInfo(
             meetingId,
             "organizer@contoso.com",
             DateTimeOffset.UtcNow.AddHours(-1),
             DateTimeOffset.UtcNow.AddMinutes(30),
-            true, // Transcription enabled
-            null,
-            DateTimeOffset.UtcNow,
-            MeetingStatus.Active
+            true // Transcription enabled
         );
     }
 

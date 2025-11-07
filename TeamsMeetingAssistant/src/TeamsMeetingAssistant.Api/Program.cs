@@ -9,6 +9,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Add HttpClient for API calls
+builder.Services.AddHttpClient();
+
 // Configure CORS
 builder.Services.AddCors(options =>
 {
@@ -17,7 +20,8 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(builder.Configuration["AllowedOrigins"] ?? "http://localhost:5002")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials()
+              .SetIsOriginAllowed((host) => true); // Allow any origin for development
     });
 });
 
@@ -33,16 +37,30 @@ else
 }
 
 // Register application services
+builder.Services.AddGraphClient(builder.Configuration);
 builder.Services.AddSingleton<IMeetingSessionStore, InMemoryMeetingSessionStore>();
 
 // Use mock services for demonstration - replace with real services in production
-builder.Services.AddScoped<ITranscriptService, MockGraphTranscriptService>();
-builder.Services.AddScoped<IQuestionGenerationService, MockOpenAIQuestionService>();
+var useMockServices = builder.Configuration.GetValue<bool>("UseMockServices", true);
+
+if (useMockServices)
+{
+    builder.Services.AddScoped<ITranscriptService, MockGraphTranscriptService>();
+}
+else
+{
+    builder.Services.AddScoped<ITranscriptService, GraphTranscriptService>();
+}
+
+builder.Services.AddScoped<IQuestionGenerationService, OpenAIQuestionService>();
 builder.Services.AddScoped<ISignalRService, TeamsMeetingAssistant.Api.SignalRHubService>();
+
+// Register SubscriptionRenewalService as singleton for dependency injection
+builder.Services.AddSingleton<TeamsMeetingAssistant.Api.SubscriptionRenewalService>();
 
 // Add background services
 builder.Services.AddHostedService<TeamsMeetingAssistant.Api.TranscriptPollingService>();
-builder.Services.AddHostedService<TeamsMeetingAssistant.Api.SubscriptionRenewalService>();
+builder.Services.AddHostedService(provider => provider.GetService<TeamsMeetingAssistant.Api.SubscriptionRenewalService>()!);
 
 // Add basic health checks
 builder.Services.AddHealthChecks()

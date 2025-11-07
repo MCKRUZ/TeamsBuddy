@@ -1,0 +1,39 @@
+@page "/privacy"
+@{
+    ViewData["Title"] = "Privacy Policy";
+}
+
+<div class="container mt-4">
+    <h1>Privacy Policy</h1>
+    <p><strong>Last updated:</strong> @DateTime.Now.ToString("MMMM dd, yyyy")</p>
+    
+    <h2>Information We Collect</h2>
+    <p>Teams Meeting Assistant processes meeting transcript data to provide question suggestions. We collect:</p>
+    <ul>
+        <li>Meeting transcript content (when explicitly enabled)</li>
+        <li>Generated question suggestions</li>
+        <li>Usage analytics for improving the service</li>
+    </ul>
+    
+    <h2>How We Use Information</h2>
+    <p>We use the information to:</p>
+    <ul>
+        <li>Generate relevant question suggestions during meetings</li>
+        <li>Improve the quality of our AI-powered suggestions</li>
+        <li>Provide usage analytics to meeting organizers</li>
+    </ul>
+    
+    <h2>Data Security</h2>
+    <p>We implement appropriate security measures to protect your information:</p>
+    <ul>
+        <li>All data transmission is encrypted using HTTPS</li>
+        <li>Meeting data is processed in real-time and not permanently stored</li>
+        <li>Access to the service requires proper Teams authentication</li>
+    </ul>
+    
+    <h2>Data Retention</h2>
+    <p>Meeting transcript data is processed in real-time for question generation and is not retained after the meeting ends.</p>
+    
+    <h2>Contact Us</h2>
+    <p>If you have questions about this Privacy Policy, please contact us through your Teams administrator.</p>
+</div>

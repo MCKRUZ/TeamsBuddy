@@ -29,6 +29,68 @@
         <a class="dismiss">🗙</a>
     </div>
 
-    <script src="_framework/blazor.server.js"></script>
+    <script>
+        console.log('Host page loaded, about to load Blazor...');
+        console.log('Current URL:', window.location.href);
+        
+        // Configure Blazor for dev tunnel
+        window.Blazor = window.Blazor || {};
+        window.Blazor.start = window.Blazor.start || function() {};
+        
+        // Dev tunnel specific configuration
+        if (window.location.hostname.includes('devtunnels.ms')) {
+            console.log('Running through dev tunnel - applying dev tunnel configuration');
+            
+            // Configure Blazor SignalR connection for dev tunnels
+            window.Blazor.defaultReconnectionHandler = {
+                onConnectionDown: () => console.log('Blazor connection lost'),
+                onConnectionUp: () => console.log('Blazor connection restored')
+            };
+        } else {
+            console.log('Running on localhost');
+        }
+        
+        // Test framework endpoint before loading Blazor
+        fetch('/_framework/blazor.server.js', { method: 'HEAD' })
+            .then(response => {
+                console.log('Framework file check:', {
+                    status: response.status,
+                    contentType: response.headers.get('content-type'),
+                    url: response.url
+                });
+            })
+            .catch(error => {
+                console.error('Framework file check failed:', error);
+            });
+    </script>
+
+    <script src="_framework/blazor.server.js" onerror="console.error('Failed to load blazor.server.js')"></script>
+    
+    <script>
+        console.log('Blazor script loaded successfully');
+        
+        // Check if Blazor object is available
+        if (typeof Blazor !== 'undefined') {
+            console.log('Blazor object is available');
+            
+            // Configure Blazor start options for dev tunnels
+            if (window.location.hostname.includes('devtunnels.ms')) {
+                console.log('Configuring Blazor for dev tunnel...');
+                Blazor.start({
+                    configureSignalR: function (builder) {
+                        console.log('Configuring SignalR for dev tunnel');
+                        return builder
+                            .withUrl('/_blazor', {
+                                transport: 1, // LongPolling only
+                                timeout: 60000,
+                                serverTimeoutInMilliseconds: 60000
+                            });
+                    }
+                });
+            }
+        } else {
+            console.error('Blazor object is NOT available');
+        }
+    </script>
 </body>
 </html>
