@@ -1,7 +1,7 @@
 {
     "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
     "manifestVersion": "1.17",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "id": "e26bc97a-9563-4a82-b5b0-1a57aa3715ed",
     "developer": {
         "name": "Teams Meeting Assistant",
@@ -22,6 +22,10 @@
         "full": "This application analyzes the meeting transcript in real-time and suggests relevant questions to help facilitate the discussion and ensure all key points are covered."
     },
     "accentColor": "#FFFFFF",
+    "webApplicationInfo": {
+        "id": "e26bc97a-9563-4a82-b5b0-1a57aa3715ed",
+        "resource": "api://lv3nz16d-7251.use.devtunnels.ms/e26bc97a-9563-4a82-b5b0-1a57aa3715ed"
+    },
     "configurableTabs": [
         {
             "configurationUrl": "https://lv3nz16d-7251.use.devtunnels.ms/meeting",

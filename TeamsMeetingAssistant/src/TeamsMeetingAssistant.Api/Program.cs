@@ -40,27 +40,43 @@ else
 builder.Services.AddGraphClient(builder.Configuration);
 builder.Services.AddSingleton<IMeetingSessionStore, InMemoryMeetingSessionStore>();
 
+// Register Conversation Store for chat memory
+builder.Services.AddSingleton<IConversationStore, InMemoryConversationStore>();
+
+// Register Token Exchange Service for SSO
+builder.Services.AddScoped<ITokenExchangeService, TokenExchangeService>();
+
+// Register Chat Service - it will receive IConversationStore through DI
+builder.Services.AddScoped<IChatService, AzureOpenAIChatService>();
+
 // Use mock services for demonstration - replace with real services in production
-var useMockServices = builder.Configuration.GetValue<bool>("UseMockServices", true);
+var useMockServices = builder.Configuration.GetValue<bool>("UseMockServices", false);
 
 if (useMockServices)
 {
-    builder.Services.AddScoped<ITranscriptService, MockGraphTranscriptService>();
+    // Mock service not implemented - using real service
+    builder.Services.AddScoped<ITranscriptService, GraphTranscriptService>();
 }
 else
 {
     builder.Services.AddScoped<ITranscriptService, GraphTranscriptService>();
 }
 
+// Register real services
 builder.Services.AddScoped<IQuestionGenerationService, OpenAIQuestionService>();
+builder.Services.AddScoped<IQAEvaluationService, OpenAIQAEvaluationService>();
 builder.Services.AddScoped<ISignalRService, TeamsMeetingAssistant.Api.SignalRHubService>();
 
-// Register SubscriptionRenewalService as singleton for dependency injection
+// Register SubscriptionRenewalService as singleton (both for DI and as hosted service)
 builder.Services.AddSingleton<TeamsMeetingAssistant.Api.SubscriptionRenewalService>();
 
-// Add background services
-builder.Services.AddHostedService<TeamsMeetingAssistant.Api.TranscriptPollingService>();
-builder.Services.AddHostedService(provider => provider.GetService<TeamsMeetingAssistant.Api.SubscriptionRenewalService>()!);
+// Register background services
+// NOTE: TranscriptPollingService is DISABLED to avoid duplicate processing
+// Real-time monitoring is handled by MeetingController.StartRealTimeTranscriptMonitoringAsync
+// builder.Services.AddHostedService<TranscriptPollingService>();
+
+builder.Services.AddHostedService<TeamsMeetingAssistant.Api.SubscriptionRenewalService>(sp => 
+    sp.GetRequiredService<TeamsMeetingAssistant.Api.SubscriptionRenewalService>());
 
 // Add basic health checks
 builder.Services.AddHealthChecks()

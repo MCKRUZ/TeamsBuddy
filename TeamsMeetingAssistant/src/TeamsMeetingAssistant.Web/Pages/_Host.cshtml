@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using Microsoft.AspNetCore.Components.Web
 @namespace TeamsMeetingAssistant.Web.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -26,12 +26,60 @@
             An unhandled exception has occurred. See browser dev tools for details.
         </environment>
         <a href="" class="reload">Reload</a>
-        <a class="dismiss">🗙</a>
+        <a class="dismiss">??</a>
     </div>
 
+    <!-- Microsoft Teams JavaScript SDK - Integrity removed for dev tunnel compatibility -->
+    <script src="https://res.cdn.office.net/teams-js/2.19.0/js/MicrosoftTeams.min.js" 
+            crossorigin="anonymous"
+            onerror="console.error('[HOST] ? CRITICAL: Failed to load Teams SDK from CDN');">
+    </script>
+    
+    <!-- Verify Teams SDK loaded -->
     <script>
-        console.log('Host page loaded, about to load Blazor...');
-        console.log('Current URL:', window.location.href);
+        (function() {
+            console.log('[HOST] ========== TEAMS SDK LOAD CHECK ==========');
+            console.log('[HOST] Timestamp:', new Date().toISOString());
+            console.log('[HOST] Current URL:', window.location.href);
+            console.log('[HOST] Referrer:', document.referrer);
+            console.log('[HOST] In iframe:', window !== window.top);
+            
+            if (typeof microsoftTeams !== 'undefined') {
+                console.log('[HOST] ? Teams SDK loaded successfully');
+                console.log('[HOST] Teams SDK version:', microsoftTeams.version);
+                console.log('[HOST] Teams SDK object keys:', Object.keys(microsoftTeams));
+            } else {
+                console.error('[HOST] ? Teams SDK NOT loaded - microsoftTeams is undefined');
+                console.error('[HOST] This will cause SSO to fail!');
+                console.error('[HOST] Possible causes:');
+                console.error('[HOST]   1. CDN blocked by network/firewall');
+                console.error('[HOST]   2. CSP policy blocking script');
+                console.error('[HOST]   3. Script failed to download');
+                
+                // Try to check CDN reachability
+                fetch('https://res.cdn.office.net/teams-js/2.19.0/js/MicrosoftTeams.min.js', { method: 'HEAD' })
+                    .then(response => {
+                        console.log('[HOST] CDN reachability test:', {
+                            status: response.status,
+                            statusText: response.statusText,
+                            ok: response.ok
+                        });
+                    })
+                    .catch(error => {
+                        console.error('[HOST] CDN reachability test failed:', error);
+                    });
+            }
+            console.log('[HOST] ========================================');
+        })();
+    </script>
+
+    <!-- Teams Authentication Helper -->
+    <script src="js/teams-auth.js"></script>
+
+    <script>
+        console.log('[HOST] Host page loaded, about to load Blazor...');
+        console.log('[HOST] Current URL:', window.location.href);
+        console.log('[HOST] Microsoft Teams SDK available:', typeof microsoftTeams !== 'undefined');
         
         // Configure Blazor for dev tunnel
         window.Blazor = window.Blazor || {};
@@ -39,46 +87,46 @@
         
         // Dev tunnel specific configuration
         if (window.location.hostname.includes('devtunnels.ms')) {
-            console.log('Running through dev tunnel - applying dev tunnel configuration');
+            console.log('[HOST] Running through dev tunnel - applying dev tunnel configuration');
             
             // Configure Blazor SignalR connection for dev tunnels
             window.Blazor.defaultReconnectionHandler = {
-                onConnectionDown: () => console.log('Blazor connection lost'),
-                onConnectionUp: () => console.log('Blazor connection restored')
+                onConnectionDown: () => console.log('[HOST] Blazor connection lost'),
+                onConnectionUp: () => console.log('[HOST] Blazor connection restored')
             };
         } else {
-            console.log('Running on localhost');
+            console.log('[HOST] Running on localhost');
         }
         
         // Test framework endpoint before loading Blazor
         fetch('/_framework/blazor.server.js', { method: 'HEAD' })
             .then(response => {
-                console.log('Framework file check:', {
+                console.log('[HOST] Framework file check:', {
                     status: response.status,
                     contentType: response.headers.get('content-type'),
                     url: response.url
                 });
             })
             .catch(error => {
-                console.error('Framework file check failed:', error);
+                console.error('[HOST] Framework file check failed:', error);
             });
     </script>
 
-    <script src="_framework/blazor.server.js" onerror="console.error('Failed to load blazor.server.js')"></script>
+    <script src="_framework/blazor.server.js" onerror="console.error('[HOST] ? Failed to load blazor.server.js')"></script>
     
     <script>
-        console.log('Blazor script loaded successfully');
+        console.log('[HOST] Blazor script loaded successfully');
         
         // Check if Blazor object is available
         if (typeof Blazor !== 'undefined') {
-            console.log('Blazor object is available');
+            console.log('[HOST] Blazor object is available');
             
             // Configure Blazor start options for dev tunnels
             if (window.location.hostname.includes('devtunnels.ms')) {
-                console.log('Configuring Blazor for dev tunnel...');
+                console.log('[HOST] Configuring Blazor for dev tunnel...');
                 Blazor.start({
                     configureSignalR: function (builder) {
-                        console.log('Configuring SignalR for dev tunnel');
+                        console.log('[HOST] Configuring SignalR for dev tunnel');
                         return builder
                             .withUrl('/_blazor', {
                                 transport: 1, // LongPolling only
@@ -89,8 +137,10 @@
                 });
             }
         } else {
-            console.error('Blazor object is NOT available');
+            console.error('[HOST] Blazor object is NOT available');
         }
+        
+        console.log('[HOST] ========== HOST INITIALIZATION COMPLETE ==========');
     </script>
 </body>
 </html>

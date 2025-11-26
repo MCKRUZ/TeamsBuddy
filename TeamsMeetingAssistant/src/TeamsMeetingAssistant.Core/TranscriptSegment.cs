@@ -1,5 +1,11 @@
 namespace TeamsMeetingAssistant.Core;
 
+public enum SpeakerRole
+{
+    Interviewer,
+    Interviewee
+}
+
 public record TranscriptSegment(
     string Id,
     string SpeakerName,
@@ -7,5 +13,6 @@ public record TranscriptSegment(
     string Content,
     DateTimeOffset Timestamp,
     TimeSpan StartTime,
-    TimeSpan EndTime
+    TimeSpan EndTime,
+    SpeakerRole Role = SpeakerRole.Interviewee
 );

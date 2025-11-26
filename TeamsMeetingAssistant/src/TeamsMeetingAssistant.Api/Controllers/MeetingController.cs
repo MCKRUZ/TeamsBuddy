@@ -1,7 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Identity.Client;
-using System.Security.Claims;
-using System.Text.Json;
 using System.Collections.Concurrent;
 using TeamsMeetingAssistant.Core;
 using TeamsMeetingAssistant.Core.Interfaces;
@@ -20,10 +17,13 @@ public class MeetingController : ControllerBase
     private readonly SubscriptionRenewalService _renewalService;
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ITokenExchangeService _tokenExchangeService;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
+
 
     // Static dictionary to manage real-time monitoring tasks
     private static readonly Dictionary<string, RealTimeMonitoringTask> _activeMonitoringTasks = new();
-    
+
     // SHARED deduplication tracker - used by both polling and webhooks
     public static readonly ConcurrentDictionary<string, HashSet<string>> ProcessedSegmentIds = new();
 
@@ -35,7 +35,9 @@ public class MeetingController : ControllerBase
         ILogger<MeetingController> logger,
         SubscriptionRenewalService renewalService,
         IConfiguration configuration,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ITokenExchangeService tokenExchangeService,
+        IServiceScopeFactory serviceScopeFactory)
     {
         _sessionStore = sessionStore;
         _transcriptService = transcriptService;
@@ -45,6 +47,8 @@ public class MeetingController : ControllerBase
         _renewalService = renewalService;
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
+        _tokenExchangeService = tokenExchangeService;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     [HttpPost("start")]
@@ -56,8 +60,57 @@ public class MeetingController : ControllerBase
         {
             _logger.LogInformation("Starting monitoring for meeting URL/ID: {MeetingUrlOrId}", request.MeetingId);
 
-            // Get user ID from request or use default
-            var userId = request.UserId ?? _configuration["AzureAd:DefaultUserId"] ?? "aacdff60-4840-45f4-814e-4243bdd0636e";
+            string? accessToken = null;
+            bool usedSso = false;
+
+            // Determine authentication mode: SSO or fallback
+            if (!string.IsNullOrWhiteSpace(request.IdToken))
+            {
+                _logger.LogInformation("SSO token provided, using On-Behalf-Of flow");
+
+                try
+                {
+                    // Validate and extract user info from ID token
+                    var isValid = await _tokenExchangeService.ValidateTokenAsync(request.IdToken);
+                    if (!isValid)
+                    {
+                        return Unauthorized(new { error = "Invalid ID token" });
+                    }
+
+                    // Exchange ID token for Graph API access token
+                    accessToken = await _tokenExchangeService.ExchangeTokenAsync(request.IdToken, cancellationToken);
+                    usedSso = true;
+
+                    _logger.LogInformation("SSO authentication successful");
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    _logger.LogError(ex, "User consent required for SSO");
+                    return Unauthorized(new
+                    {
+                        error = "consent_required",
+                        message = "User consent is required. Please consent to the required permissions.",
+                        details = ex.Message
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "SSO token exchange failed");
+                    return BadRequest(new
+                    {
+                        error = "sso_failed",
+                        message = "Failed to exchange SSO token",
+                        details = ex.Message
+                    });
+                }
+            }
+            else
+            {
+                // Fallback mode: Use app-only token
+                _logger.LogInformation("No SSO token provided, using fallback mode");
+                accessToken = await _tokenExchangeService.GetAppOnlyTokenAsync(cancellationToken);
+                usedSso = false;
+            }
 
             string meetingId;
             string? joinWebUrl = null;
@@ -71,8 +124,14 @@ public class MeetingController : ControllerBase
 
                 try
                 {
-                    var meetingInfo = await _transcriptService.GetMeetingInfoAsync(joinWebUrl, userId, cancellationToken);
-                    
+                    // Set the access token in the transcript service before making any calls
+                    if (!string.IsNullOrEmpty(accessToken))
+                    {
+                        _transcriptService.SetAccessToken(accessToken);
+                    }
+
+                    var meetingInfo = await _transcriptService.GetMeetingInfoAsync(joinWebUrl, cancellationToken);
+
                     if (meetingInfo == null || string.IsNullOrEmpty(meetingInfo.MeetingId))
                     {
                         return BadRequest(new
@@ -106,31 +165,61 @@ public class MeetingController : ControllerBase
             // Step 2: Test access to meeting transcripts using the delta-enabled service
             // This will establish the delta link for future queries
             _logger.LogInformation("Fetching initial transcripts and establishing delta link for meeting {MeetingId}", meetingId);
-            
+
+            // Set the access token in the transcript service before making any calls
+            if (!string.IsNullOrEmpty(accessToken))
+            {
+                _transcriptService.SetAccessToken(accessToken);
+            }
+
             var initialSegments = await _transcriptService.GetNewTranscriptSegmentsAsync(
                 meetingId,
-                DateTimeOffset.UtcNow.AddMinutes(-5), // Start from 5 minutes ago
+                DateTimeOffset.UtcNow.AddMinutes(-5),
                 cancellationToken);
 
             var initialSegmentsList = initialSegments.ToList();
-            
+
             _logger.LogInformation("Initial fetch returned {Count} transcript segments", initialSegmentsList.Count);
 
-            // Step 3: Create or update session
+            // Step 3: Extract interviewer user ID from ID token (if SSO is used)
+            string? interviewerUserId = null;
+            string? interviewerDisplayName = null;
+            if (!string.IsNullOrWhiteSpace(request.IdToken))
+            {
+                try
+                {
+                    var userInfo = await _tokenExchangeService.GetUserInfoFromTokenAsync(request.IdToken);
+                    interviewerUserId = userInfo.UserId;
+                    interviewerDisplayName = userInfo.Name ?? userInfo.UserPrincipalName;
+                    _logger.LogInformation("Extracted interviewer from OBO token: ID={UserId}, Name={Name}",
+                        userInfo.UserId, interviewerDisplayName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to extract user info from ID token");
+                }
+            }
+
+            // Step 4: Create or update session
             var session = new MeetingSession(
                 meetingId,
-                $"user-{userId}@domain.com", // Placeholder organizer email
+                $"meeting-organizer@domain.com", // Organizer email is tracked in the session but not needed for monitoring
                 DateTimeOffset.UtcNow,
                 null,
                 true,
                 null,
                 DateTimeOffset.UtcNow,
-                MeetingStatus.Active
+                MeetingStatus.Active,
+                FirstSpeakerId: null,
+                InterviewerUserId: interviewerUserId,
+                InterviewerDisplayName: interviewerDisplayName,
+                State: ConversationState.WaitingForInterviewerQuestion,
+                LastQuestionGeneratedAt: null
             );
 
             await _sessionStore.AddOrUpdateAsync(session);
 
-            // Step 4: Configure polling interval (10-60 seconds for real-time)
+            // Step 5: Configure polling interval
             var pollingInterval = request.PollingIntervalSeconds ?? 60;
             if (pollingInterval < 10)
             {
@@ -143,9 +232,9 @@ public class MeetingController : ControllerBase
                 pollingInterval = 60;
             }
 
-            await StartRealTimeTranscriptMonitoringAsync(userId, meetingId, pollingInterval);
+            await StartRealTimeTranscriptMonitoringAsync(meetingId, pollingInterval);
 
-            // Step 5: Subscribe to webhooks for real-time updates
+            // Step 6: Subscribe to webhooks for real-time updates
             bool webhooksEnabled = request.UseWebhooks;
             string? subscriptionId = null;
 
@@ -153,11 +242,10 @@ public class MeetingController : ControllerBase
             {
                 try
                 {
-                    // Use the public URL or configured webhook endpoint
                     var webhookBaseUrl = _configuration["Webhook:BaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
                     var webhookUrl = $"{webhookBaseUrl}/api/webhook/transcript";
-                    
-                    _logger.LogInformation("Creating webhook subscription for meeting {MeetingId} with URL: {WebhookUrl}", 
+
+                    _logger.LogInformation("Creating webhook subscription for meeting {MeetingId} with URL: {WebhookUrl}",
                         meetingId, webhookUrl);
 
                     var subscription = await _transcriptService.SubscribeToTranscriptChangesAsync(
@@ -169,37 +257,37 @@ public class MeetingController : ControllerBase
                     var expirationTime = subscription.ExpirationDateTime ?? DateTimeOffset.UtcNow.AddMinutes(30);
 
                     _renewalService.TrackSubscription(meetingId, subscription.Id, expirationTime);
-                    
-                    _logger.LogInformation("✅ Webhook subscription created: {SubscriptionId}, expires at {ExpirationTime}", 
+
+                    _logger.LogInformation("✅ Webhook subscription created: {SubscriptionId}, expires at {ExpirationTime}",
                         subscription.Id, expirationTime);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "⚠️ Failed to create webhook subscription for meeting {MeetingId}, falling back to polling only", 
+                    _logger.LogWarning(ex, "⚠️ Failed to create webhook subscription for meeting {MeetingId}, falling back to polling only",
                         meetingId);
                     webhooksEnabled = false;
-                    // Continue without webhooks - polling will handle updates
                 }
             }
 
-            _logger.LogInformation("Started monitoring meeting {MeetingId} - Polling: {Interval}s, Webhooks: {Webhooks}", 
-                meetingId, pollingInterval, webhooksEnabled ? "Enabled" : "Disabled");
+            _logger.LogInformation("Started monitoring meeting {MeetingId} - Auth: {AuthMode}, Polling: {Interval}s, Webhooks: {Webhooks}",
+                meetingId, usedSso ? "SSO" : "Fallback", pollingInterval, webhooksEnabled ? "Enabled" : "Disabled");
 
-            return Ok(new { 
+            return Ok(new
+            {
                 meetingId = meetingId,
                 meetingUrl = joinWebUrl,
                 status = "monitoring",
+                authenticationMode = usedSso ? "sso" : "fallback",
                 pollingInterval = pollingInterval,
-                userId = userId,
                 initialTranscriptCount = initialSegmentsList.Count,
                 webhooks = new
                 {
                     enabled = webhooksEnabled,
                     subscriptionId = subscriptionId
                 },
-                message = webhooksEnabled 
-                    ? "Real-time monitoring active with webhooks and delta polling" 
-                    : "Real-time monitoring active with delta polling only",
+                message = usedSso
+                    ? "Monitoring active with Teams SSO authentication"
+                    : "Monitoring active with fallback authentication (debugging mode)",
                 deltaQueryEnabled = true
             });
         }
@@ -230,7 +318,7 @@ public class MeetingController : ControllerBase
             // Clear deduplication cache for this meeting
             if (ProcessedSegmentIds.TryRemove(request.MeetingId, out var processedIds))
             {
-                _logger.LogInformation("Cleared {Count} processed segment IDs for meeting {MeetingId}", 
+                _logger.LogInformation("Cleared {Count} processed segment IDs for meeting {MeetingId}",
                     processedIds.Count, request.MeetingId);
             }
 
@@ -249,7 +337,7 @@ public class MeetingController : ControllerBase
 
             // Clean up webhooks
             _renewalService.UntrackSubscription(request.MeetingId);
-            
+
             // Clear webhook transcript cache
             try
             {
@@ -308,19 +396,26 @@ public class MeetingController : ControllerBase
         try
         {
             var session = await _sessionStore.GetAsync(meetingId);
-
             if (session == null)
             {
-                return NotFound(new { error = "Meeting session not found" });
+                return NotFound(new { error = $"No session found for meeting {meetingId}" });
             }
 
-            var isMonitoring = _activeMonitoringTasks.ContainsKey(meetingId) && 
-                              !_activeMonitoringTasks[meetingId].CancellationTokenSource.Token.IsCancellationRequested;
+            var isMonitoring = _activeMonitoringTasks.ContainsKey(meetingId);
+            var processedSegmentCount = ProcessedSegmentIds.TryGetValue(meetingId, out var ids) ? ids.Count : 0;
 
             return Ok(new
             {
                 session,
-                isRealTimeMonitoring = isMonitoring
+                isMonitoring,
+                processedSegmentCount,
+                monitoring = _activeMonitoringTasks.TryGetValue(meetingId, out var task) ? new
+                {
+                    startedAt = task.StartedAt,
+                    lastUpdateAt = task.LastUpdateAt,
+                    pollingIntervalSeconds = task.PollingIntervalSeconds,
+                    isActive = !task.CancellationTokenSource.Token.IsCancellationRequested
+                } : null
             });
         }
         catch (Exception ex)
@@ -330,44 +425,64 @@ public class MeetingController : ControllerBase
         }
     }
 
-    [HttpDelete("{meetingId}")]
-    public async Task<IActionResult> DeleteSession(string meetingId)
+    [HttpGet("{meetingId}/debug")]
+    public IActionResult GetDebugInfo(string meetingId)
     {
         try
         {
-            _logger.LogInformation("Deleting session for meeting {MeetingId}", meetingId);
+            var hasProcessedSegments = ProcessedSegmentIds.TryGetValue(meetingId, out var segmentIds);
+            var hasMonitoringTask = _activeMonitoringTasks.TryGetValue(meetingId, out var task);
 
-            // Stop monitoring if active
-            if (_activeMonitoringTasks.TryGetValue(meetingId, out var monitoringTask))
+            return Ok(new
             {
-                monitoringTask.CancellationTokenSource.Cancel();
-                _activeMonitoringTasks.Remove(meetingId);
-            }
-
-            await _sessionStore.RemoveAsync(meetingId);
-            _renewalService.UntrackSubscription(meetingId);
-
-            return Ok(new { message = "Session deleted successfully" });
+                meetingId,
+                timestamp = DateTimeOffset.UtcNow,
+                sharedSegmentCache = new
+                {
+                    exists = hasProcessedSegments,
+                    segmentCount = hasProcessedSegments ? segmentIds!.Count : 0,
+                    recentSegments = hasProcessedSegments
+                        ? segmentIds!.Take(10).ToList()
+                        : new List<string>()
+                },
+                pollingStatus = new
+                {
+                    isActive = hasMonitoringTask && !task!.CancellationTokenSource.Token.IsCancellationRequested,
+                    startedAt = hasMonitoringTask ? task!.StartedAt : (DateTimeOffset?)null,
+                    lastUpdateAt = hasMonitoringTask ? task!.LastUpdateAt : (DateTimeOffset?)null,
+                    intervalSeconds = hasMonitoringTask ? task!.PollingIntervalSeconds : (int?)null
+                },
+                webhookStatus = new
+                {
+                    // Note: Webhook uses same shared segment cache
+                    message = "Webhooks share the same segment deduplication cache as polling"
+                }
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete session for meeting {MeetingId}", meetingId);
+            _logger.LogError(ex, "Failed to get debug info for meeting {MeetingId}", meetingId);
             return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    #region Real-Time Monitoring Implementation
 
-    private async Task StartRealTimeTranscriptMonitoringAsync(string userId, string meetingId, int pollingIntervalSeconds)
+
+    private async Task StartRealTimeTranscriptMonitoringAsync(string meetingId, int pollingIntervalSeconds)
     {
-        // Cancel any existing monitoring for this meeting
+        // Stop existing monitoring task if any
         if (_activeMonitoringTasks.TryGetValue(meetingId, out var existingTask))
         {
             existingTask.CancellationTokenSource.Cancel();
             _activeMonitoringTasks.Remove(meetingId);
+            _logger.LogInformation("[POLLING] Stopped existing monitoring task for meeting {MeetingId}", meetingId);
         }
 
-        // Create new monitoring task
+        // Initialize deduplication set for this meeting (shared with webhook)
+        ProcessedSegmentIds.TryAdd(meetingId, new HashSet<string>());
+        _logger.LogInformation("[POLLING] Initialized shared segment deduplication for meeting {MeetingId}", meetingId);
+
+        // New CTS for this monitoring run
         var cts = new CancellationTokenSource();
         var monitoringTask = new RealTimeMonitoringTask
         {
@@ -379,141 +494,404 @@ public class MeetingController : ControllerBase
 
         _activeMonitoringTasks[meetingId] = monitoringTask;
 
-        // Start monitoring in background
-        _ = Task.Run(async () => await MonitorTranscriptsAsync(userId, meetingId, pollingIntervalSeconds, cts.Token));
-    }
-
-    private async Task MonitorTranscriptsAsync(string userId, string meetingId, int pollingIntervalSeconds, CancellationToken cancellationToken)
-    {
-        var lastProcessedTime = DateTimeOffset.UtcNow.AddMinutes(-5);
-        
-        // Get or create the shared deduplication set for this meeting
-        var processedSegmentIds = ProcessedSegmentIds.GetOrAdd(meetingId, _ => new HashSet<string>());
-
-        _logger.LogInformation("Started real-time transcript monitoring for meeting {MeetingId} with {Interval}s polling interval", 
-            meetingId, pollingIntervalSeconds);
-
-        try
+        // Start background task for polling
+        _ = Task.Run(async () =>
         {
-            while (!cancellationToken.IsCancellationRequested)
+            _logger.LogInformation("[POLLING] Started monitoring task for meeting {MeetingId} with {Interval}s interval",
+                meetingId, pollingIntervalSeconds);
+
+            var pollCount = 0;
+
+            try
             {
-                try
+                while (!cts.Token.IsCancellationRequested)
                 {
-                    // Wait for the polling interval BEFORE fetching
-                    _logger.LogDebug("Waiting {Interval} seconds before next poll for meeting {MeetingId}", 
-                        pollingIntervalSeconds, meetingId);
-                    
-                    await Task.Delay(TimeSpan.FromSeconds(pollingIntervalSeconds), cancellationToken);
+                    pollCount++;
+                    var executionId = Guid.NewGuid().ToString("N")[..8];
 
-                    // Update monitoring task timestamp
-                    if (_activeMonitoringTasks.TryGetValue(meetingId, out var task))
+                    try
                     {
-                        task.LastUpdateAt = DateTimeOffset.UtcNow;
-                    }
+                        _logger.LogDebug("[POLLING-{ExecutionId}] Poll #{PollCount} starting for meeting {MeetingId}",
+                            executionId, pollCount, meetingId);
 
-                    _logger.LogInformation("Polling for new transcripts for meeting {MeetingId} at {Time}", 
-                        meetingId, DateTimeOffset.UtcNow.ToString("HH:mm:ss"));
-
-                    // Get new transcript segments using the delta query
-                    var newSegments = await _transcriptService.GetNewTranscriptSegmentsAsync(
-                        meetingId,
-                        lastProcessedTime,
-                        cancellationToken);
-
-                    var newSegmentsList = newSegments?.ToList() ?? new List<TranscriptSegment>();
-
-                    if (newSegmentsList.Any())
-                    {
-                        // Deduplicate using SHARED set (also used by webhooks)
-                        List<TranscriptSegment> actuallyNewSegments;
-                        lock (processedSegmentIds)
+                        // Get the latest session state
+                        var session = await _sessionStore.GetAsync(meetingId);
+                        if (session == null || session.Status != MeetingStatus.Active)
                         {
-                            actuallyNewSegments = newSegmentsList
-                                .Where(s => processedSegmentIds.Add(s.Id)) // Only segments we haven't seen
+                            _logger.LogWarning("[POLLING-{ExecutionId}] Session not found or not active, stopping monitoring",
+                                executionId);
+                            break;
+                        }
+
+                        // 5s overlap to tolerate clock skew & late arrivals
+                        var fetchSince = monitoringTask.LastUpdateAt.AddSeconds(-5);
+                        _logger.LogDebug("[POLLING-{ExecutionId}] Fetching segments since {Since} (5s overlap)",
+                            executionId, fetchSince);
+
+                        // Fetch new transcript segments using delta query
+                        var newSegments = await _transcriptService.GetNewTranscriptSegmentsAsync(
+                            meetingId,
+                            fetchSince,
+                            cts.Token);
+
+                        var segmentsList = newSegments.ToList();
+                        _logger.LogDebug("[POLLING-{ExecutionId}] Retrieved {Count} total segments from transcript service",
+                            executionId, segmentsList.Count);
+
+                        if (!segmentsList.Any())
+                        {
+                            _logger.LogDebug("[POLLING-{ExecutionId}] No segments retrieved", executionId);
+                            goto DelayAndContinue;
+                        }
+
+                        // Segment-level deduplication using SHARED cache with webhook
+                        var processedIds = ProcessedSegmentIds[meetingId];
+                        List<TranscriptSegment> unprocessedSegments;
+
+                        lock (processedIds)
+                        {
+                            var beforeCount = processedIds.Count;
+                            unprocessedSegments = segmentsList
+                                .Where(s => processedIds.Add(s.Id))
                                 .ToList();
+                            var afterCount = processedIds.Count;
+
+                            _logger.LogInformation(
+                                "[POLLING-{ExecutionId}] Segment deduplication: {Total} retrieved, {New} new, {Duplicate} duplicates. Shared cache: {Before} → {After}",
+                                executionId, segmentsList.Count, unprocessedSegments.Count,
+                                segmentsList.Count - unprocessedSegments.Count, beforeCount, afterCount);
                         }
 
-                        if (actuallyNewSegments.Any())
+                        if (!unprocessedSegments.Any())
                         {
-                            _logger.LogInformation("Found {Count} NEW transcript segments for meeting {MeetingId} (polling)", 
-                                actuallyNewSegments.Count, meetingId);
+                            _logger.LogInformation(
+                                "[POLLING-{ExecutionId}] ALL DUPLICATES - All {Count} segments already processed by polling/webhook",
+                                executionId, segmentsList.Count);
+                            goto DelayAndContinue;
+                        }
 
-                            // Send segments to clients via SignalR
-                            foreach (var segment in actuallyNewSegments)
+                        // Determine interviewer identifier: from OBO token or first speaker's display name
+                        var interviewerIdentifier = session.InterviewerDisplayName;
+                        var firstSpeakerName = session.FirstSpeakerId; // stores the first speaker's display name
+
+                        if (string.IsNullOrEmpty(interviewerIdentifier) &&
+                            string.IsNullOrEmpty(firstSpeakerName) &&
+                            unprocessedSegments.Any())
+                        {
+                            // Fallback: Use first speaker's name
+                            firstSpeakerName = unprocessedSegments.First().SpeakerId;
+                            _logger.LogWarning(
+                                "[POLLING-{ExecutionId}] No interviewer from OBO token. Using first speaker as interviewer: {SpeakerName}",
+                                executionId, firstSpeakerName);
+
+                            // Update session with first speaker name
+                            var updatedSession = session with { FirstSpeakerId = firstSpeakerName };
+                            await _sessionStore.AddOrUpdateAsync(updatedSession);
+                            session = updatedSession;
+                        }
+
+                        // Process segments with role assignment and state machine
+                        var currentState = session.State;
+                        var currentQAExchange = session.CurrentQAExchange;
+                        var segmentsWithRoles = new List<TranscriptSegment>();
+
+                        _logger.LogInformation("[POLLING-{ExecutionId}] Broadcasting {Count} NEW segments to SignalR clients",
+                            executionId, unprocessedSegments.Count);
+                        _logger.LogInformation(
+                            "[POLLING-{ExecutionId}] Role assignment identifiers - Interviewer: '{Interviewer}', Fallback: '{Fallback}'",
+                            executionId, interviewerIdentifier ?? "(none)", firstSpeakerName ?? "(none)");
+
+                        foreach (var segment in unprocessedSegments)
+                        {
+                            // IMPORTANT: SpeakerId/Name are display names from VTT (e.g., "Efrain Goyzueta")
+                            bool isInterviewer = false;
+
+                            if (!string.IsNullOrEmpty(interviewerIdentifier))
                             {
-                                await _signalRService.SendTranscriptUpdateAsync(meetingId, segment);
-                                _logger.LogDebug("Sent segment: {Speaker}: {Content}", 
-                                    segment.SpeakerName, 
-                                    segment.Content.Length > 50 ? segment.Content.Substring(0, 50) + "..." : segment.Content);
+                                isInterviewer =
+                                    string.Equals(segment.SpeakerId, interviewerIdentifier, StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(segment.SpeakerName, interviewerIdentifier, StringComparison.OrdinalIgnoreCase);
+                            }
+                            else if (!string.IsNullOrEmpty(firstSpeakerName))
+                            {
+                                isInterviewer =
+                                    string.Equals(segment.SpeakerId, firstSpeakerName, StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(segment.SpeakerName, firstSpeakerName, StringComparison.OrdinalIgnoreCase);
                             }
 
-                            // Update last processed time to the newest segment
-                            lastProcessedTime = actuallyNewSegments.Max(s => s.Timestamp);
-                            _logger.LogDebug("Updated lastProcessedTime to {Time}", lastProcessedTime.ToString("HH:mm:ss"));
-
-                            // Update session last processed time
-                            var session = await _sessionStore.GetAsync(meetingId);
-                            if (session != null)
+                            var updatedSegment = segment with
                             {
-                                var updatedSession = session with
+                                Role = isInterviewer ? SpeakerRole.Interviewer : SpeakerRole.Interviewee
+                            };
+                            segmentsWithRoles.Add(updatedSegment);
+
+                            // Update conversation state & Q&A exchange
+                            (currentState, currentQAExchange) = UpdateConversationStateWithQA(
+                                currentState,
+                                currentQAExchange,
+                                updatedSegment.Role,
+                                segment.Content);
+
+                            _logger.LogDebug(
+                                "[POLLING-{ExecutionId}] Segment from {Speaker} (Name: {SpeakerName}, ID: {SpeakerId}, Role: {Role}). State: {State}",
+                                executionId, segment.SpeakerName, segment.SpeakerName, segment.SpeakerId,
+                                updatedSegment.Role, currentState);
+
+                            // Send to SignalR with role assigned
+                            await _signalRService.SendTranscriptUpdateAsync(meetingId, updatedSegment);
+                        }
+
+                        // Decide if we should evaluate the candidate's response
+                        bool shouldEvaluate =
+                            currentState == ConversationState.CandidateResponding &&
+                            currentQAExchange != null &&
+                            currentQAExchange.CandidateResponses.Any();
+
+                        // Timeout: if candidate hasn't spoken in 10s, evaluate accumulated responses
+                        if (shouldEvaluate)
+                        {
+                            var timeSinceLastSegment = DateTimeOffset.UtcNow - unprocessedSegments.Last().Timestamp;
+                            var evaluationTimeout = TimeSpan.FromSeconds(10);
+
+                            if (timeSinceLastSegment >= evaluationTimeout)
+                            {
+                                _logger.LogInformation(
+                                    "[POLLING-{ExecutionId}] ⏰ Candidate response timeout. Evaluating accumulated responses",
+                                    executionId);
+                                currentState = ConversationState.EvaluatingResponse;
+                            }
+                        }
+
+                        // Evaluate response & optionally generate follow-ups (in isolated background scope)
+                        if (currentState == ConversationState.EvaluatingResponse && currentQAExchange != null)
+                        {
+                            _logger.LogInformation(
+                                "[POLLING-{ExecutionId}] 🔍 Triggering Q&A evaluation (non-blocking). Question: '{Question}', Responses: {Count}",
+                                executionId,
+                                currentQAExchange.InterviewerQuestion.Substring(0,
+                                    Math.Min(50, currentQAExchange.InterviewerQuestion.Length)),
+                                currentQAExchange.CandidateResponses.Count);
+
+                            // Defensive copies (immutable/isolated)
+                            var capturedExecutionId = executionId;
+                            var capturedMeetingId = meetingId;
+                            var capturedQAExchange = currentQAExchange;
+                            var capturedSegments = segmentsWithRoles.TakeLast(10).ToList(); // recent context
+                            var capturedLogger = _logger;
+
+                            // Fire-and-forget in a new scope; DO NOT use Task.Factory.StartNew
+                            _ = Task.Run(async () =>
+                            {
+                                using var scope = _serviceScopeFactory.CreateScope();
+                                try
                                 {
-                                    LastProcessedTime = lastProcessedTime
-                                };
-                                await _sessionStore.AddOrUpdateAsync(updatedSession);
-                            }
+                                    var qaEvaluationService = scope.ServiceProvider.GetRequiredService<IQAEvaluationService>();
+                                    var questionService = scope.ServiceProvider.GetRequiredService<IQuestionGenerationService>();
+                                    var signalRService = scope.ServiceProvider.GetRequiredService<ISignalRService>();
+                                    var sessionStore = scope.ServiceProvider.GetRequiredService<IMeetingSessionStore>();
+
+                                    capturedLogger.LogDebug(
+                                        "[POLLING-{ExecutionId}] Evaluating Q&A response quality in isolated scope",
+                                        capturedExecutionId);
+
+                                    var evaluation = await qaEvaluationService.EvaluateResponseAsync(
+                                        capturedQAExchange.InterviewerQuestion,
+                                        capturedQAExchange.CandidateResponses,
+                                        "Technical Interview",
+                                        CancellationToken.None);
+
+                                    capturedLogger.LogInformation(
+                                        "[POLLING-{ExecutionId}] Q&A Evaluation Complete: IsAnswered={IsAnswered}, Quality={Quality}, NeedsFollowUp={NeedsFollowUp}, Reasoning: {Reasoning}",
+                                        capturedExecutionId, evaluation.IsAnswered, evaluation.Quality,
+                                        evaluation.NeedsFollowUp, evaluation.Reasoning);
+
+                                    if (evaluation.NeedsFollowUp)
+                                    {
+                                        // Re-fetch session to respect cooldown
+                                        var latestSession = await sessionStore.GetAsync(capturedMeetingId);
+                                        if (latestSession == null)
+                                        {
+                                            capturedLogger.LogWarning(
+                                                "[POLLING-{ExecutionId}] Session not found during question generation",
+                                                capturedExecutionId);
+                                            return;
+                                        }
+
+                                        var timeSinceLastQuestion = latestSession.LastQuestionGeneratedAt.HasValue
+                                            ? DateTimeOffset.UtcNow - latestSession.LastQuestionGeneratedAt.Value
+                                            : TimeSpan.MaxValue;
+
+                                        var questionCooldown = TimeSpan.FromSeconds(
+                                            _configuration.GetValue<int>("TranscriptProcessing:QuestionGenerationCooldownSeconds", 30));
+
+                                        if (timeSinceLastQuestion >= questionCooldown)
+                                        {
+                                            capturedLogger.LogInformation(
+                                                "[POLLING-{ExecutionId}] Generating follow-up questions in background",
+                                                capturedExecutionId);
+
+                                            var questions = await questionService.GenerateQuestionsAsync(
+                                                capturedSegments,
+                                                latestSession.OrganizerEmail,
+                                                CancellationToken.None);
+
+                                            if (questions.Any())
+                                            {
+                                                await signalRService.SendQuestionSuggestionsAsync(capturedMeetingId, questions);
+                                                capturedLogger.LogInformation(
+                                                    "[POLLING-{ExecutionId}] Sent {Count} AI-generated follow-up questions",
+                                                    capturedExecutionId, questions.Count);
+
+                                                var updatedSession = latestSession with
+                                                {
+                                                    LastQuestionGeneratedAt = DateTimeOffset.UtcNow
+                                                };
+                                                await sessionStore.AddOrUpdateAsync(updatedSession);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            capturedLogger.LogDebug(
+                                                "[POLLING-{ExecutionId}] ⏸Follow-up needed but in cooldown. Time since last: {TimeSince}s",
+                                                capturedExecutionId, timeSinceLastQuestion.TotalSeconds);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        capturedLogger.LogInformation(
+                                            "[POLLING-{ExecutionId}] No follow-up needed. Reason: {Reasoning}",
+                                            capturedExecutionId, evaluation.Reasoning);
+                                    }
+                                }
+                                catch (ObjectDisposedException ex)
+                                {
+                                    capturedLogger.LogError(
+                                        ex,
+                                        "[POLLING-{ExecutionId}] Scope disposed during Q&A evaluation (should not happen with new scope)",
+                                        capturedExecutionId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    capturedLogger.LogError(
+                                        ex,
+                                        "[POLLING-{ExecutionId}] Failed to evaluate Q&A in background",
+                                        capturedExecutionId);
+                                }
+                            }, CancellationToken.None);
+
+                            // Reset state immediately (do not wait on evaluation)
+                            currentState = ConversationState.WaitingForInterviewerQuestion;
+                            currentQAExchange = null;
+
+                            _logger.LogDebug(
+                                "[POLLING-{ExecutionId}] State reset to WaitingForInterviewerQuestion (evaluation running in background)",
+                                executionId);
                         }
-                        else
+
+                        // Update session with latest state
+                        var finalSession = session with
                         {
-                            _logger.LogDebug("No new segments (all {Count} already processed for meeting {MeetingId})", 
-                                newSegmentsList.Count, meetingId);
-                        }
+                            LastProcessedTime = unprocessedSegments.Max(s => s.Timestamp),
+                            FirstSpeakerId = firstSpeakerName,
+                            InterviewerUserId = session.InterviewerUserId,
+                            State = currentState,
+                            CurrentQAExchange = currentQAExchange
+                        };
+                        await _sessionStore.AddOrUpdateAsync(finalSession);
+
+                        monitoringTask.LastUpdateAt = DateTimeOffset.UtcNow;
+                        _logger.LogInformation("[POLLING-{ExecutionId}] Poll complete - processed {Count} new segments, State: {State}",
+                            executionId, unprocessedSegments.Count, currentState);
+
+                    DelayAndContinue:
+                        _logger.LogDebug("[POLLING-{ExecutionId}] Waiting {Interval}s until next poll",
+                            executionId, pollingIntervalSeconds);
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        _logger.LogDebug("No segments returned from delta query for meeting {MeetingId}", meetingId);
+                        _logger.LogError(ex, "[POLLING] Error during poll #{PollCount} for meeting {MeetingId}",
+                            pollCount, meetingId);
                     }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Don't log as error - this is expected when stopping
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error in monitoring loop for meeting {MeetingId}", meetingId);
+
+                    // Wait for next polling interval (cooperative cancellation)
+                    await Task.Delay(TimeSpan.FromSeconds(pollingIntervalSeconds), cts.Token);
                 }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("Real-time transcript monitoring stopped for meeting {MeetingId}", meetingId);
-        }
-        finally
-        {
-            _activeMonitoringTasks.Remove(meetingId);
-            _logger.LogInformation("Cleaned up monitoring task for meeting {MeetingId}", meetingId);
-        }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("[POLLING] Monitoring cancelled for meeting {MeetingId} after {PollCount} polls",
+                    meetingId, pollCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[POLLING] Fatal error in monitoring for meeting {MeetingId}", meetingId);
+            }
+            finally
+            {
+                _activeMonitoringTasks.Remove(meetingId);
+                _logger.LogInformation("[POLLING] Monitoring task terminated for meeting {MeetingId}", meetingId);
+            }
+        }, cts.Token);
+
+        await Task.CompletedTask;
     }
 
-    #endregion
+    /// <summary>
+    /// Updates conversation state and Q&A exchange based on who spoke and what they said
+    /// </summary>
+    private (ConversationState newState, QAExchange? qaExchange) UpdateConversationStateWithQA(
+        ConversationState currentState,
+        QAExchange? currentQAExchange,
+        SpeakerRole speakerRole,
+        string content)
+    {
+        return (currentState, speakerRole) switch
+        {
+            // Interviewer asks a question
+            (ConversationState.WaitingForInterviewerQuestion, SpeakerRole.Interviewer) =>
+                (ConversationState.InterviewerAsked,
+                 new QAExchange(content, new List<string>(), DateTimeOffset.UtcNow)),
+
+            // Candidate starts responding
+            (ConversationState.InterviewerAsked, SpeakerRole.Interviewee) =>
+                (ConversationState.CandidateResponding,
+                 currentQAExchange?.AddResponse(content) ?? currentQAExchange),
+
+            // Candidate continues responding (accumulate)
+            (ConversationState.CandidateResponding, SpeakerRole.Interviewee) =>
+                (ConversationState.CandidateResponding,
+                 currentQAExchange?.AddResponse(content) ?? currentQAExchange),
+
+            // Interviewer interrupts or asks follow-up before evaluation
+            (ConversationState.CandidateResponding, SpeakerRole.Interviewer) =>
+                (ConversationState.InterviewerAsked,
+                 new QAExchange(content, new List<string>(), DateTimeOffset.UtcNow)),
+
+            // Default: no state change
+            _ => (currentState, currentQAExchange)
+        };
+    }
 }
 
-#region DTOs and Helper Classes
+// Request/Response Models
+public class StartMonitoringRequest
+{
+    public required string MeetingId { get; set; }
+    public string? IdToken { get; set; }
+    public bool UseWebhooks { get; set; } = true;
+    public int? PollingIntervalSeconds { get; set; }
+}
 
-public record StartMonitoringRequest(
-    string MeetingId,
-    string UserId,
-    bool UseWebhooks = true,
-    int? PollingIntervalSeconds = null);
+public class StopMonitoringRequest
+{
+    public required string MeetingId { get; set; }
+}
 
-public record StopMonitoringRequest(string MeetingId);
-
+// Helper class for tracking monitoring tasks
 public class RealTimeMonitoringTask
 {
-    public CancellationTokenSource CancellationTokenSource { get; set; } = new();
-    public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset LastUpdateAt { get; set; } = DateTimeOffset.UtcNow;
-    public int PollingIntervalSeconds { get; set; } = 20;
+    public required CancellationTokenSource CancellationTokenSource { get; set; }
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset LastUpdateAt { get; set; }
+    public int PollingIntervalSeconds { get; set; }
 }
-
-#endregion

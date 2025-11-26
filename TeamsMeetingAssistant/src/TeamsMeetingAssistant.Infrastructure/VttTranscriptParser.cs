@@ -44,7 +44,7 @@ public class VttTranscriptParser
                     currentSegment.SetEndTime(ParseTimeSpan(times[1].Trim()));
                 }
             }
-            // Parse speaker line: <v Speaker Name>Text content here
+            // Parse speaker line: <v Speaker Name>Text content here</v>
             else if (trimmedLine.StartsWith("<v "))
             {
                 var contentStart = trimmedLine.IndexOf('>') + 1;
@@ -53,20 +53,44 @@ public class VttTranscriptParser
                     var speakerWithContent = trimmedLine[3..contentStart].Trim();
                     var content = trimmedLine[contentStart..].Trim();
 
-                    // Extract speaker name and ID
-                    var speakerParts = speakerWithContent.Split(new[] { ' ' }, 2);
-                    var speakerName = speakerParts[0];
-                    var speakerId = speakerParts.Length > 1 ? speakerParts[1] : speakerName;
+                    // Remove closing </v> tag if present
+                    if (content.EndsWith("</v>", StringComparison.OrdinalIgnoreCase))
+                    {
+                        content = content[..^4].Trim();
+                    }
+
+                    // Extract full speaker name from VTT format: <v FirstName LastName>
+                    // Note: VTT doesn't include Azure AD user IDs, only display names
+                    // We'll use the full name as a stable identifier for role assignment
+                    var speakerName = speakerWithContent.Replace(">", "").Trim();
+                    
+                    // Use the speaker's full name as the ID (will be mapped to actual user ID later)
+                    var speakerId = speakerName;
 
                     currentSegment.SetSpeaker(speakerName, speakerId);
-                    currentSegment.AddContent(content);
+                    
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        currentSegment.AddContent(content);
+                    }
                 }
             }
             // Regular content line
             else if (!string.IsNullOrWhiteSpace(trimmedLine) &&
                      !trimmedLine.Contains("-->"))
             {
-                currentSegment.AddContent(trimmedLine);
+                var content = trimmedLine;
+                
+                // Remove closing </v> tag if present at the end of content line
+                if (content.EndsWith("</v>", StringComparison.OrdinalIgnoreCase))
+                {
+                    content = content[..^4].Trim();
+                }
+                
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    currentSegment.AddContent(content);
+                }
             }
         }
 

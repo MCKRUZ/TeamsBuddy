@@ -1,5 +1,7 @@
 ﻿@page "/meeting"
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.JSInterop
+@using System.Text.Json
 @implements IAsyncDisposable
 @inject IJSRuntime JSRuntime
 @inject IHttpClientFactory HttpClientFactory
@@ -9,55 +11,214 @@
 <PageTitle>Teams Meeting Assistant</PageTitle>
 
 <div class="container-fluid">
-    <div class="row">
-        <div class="col-md-8">
-            <h3>Live Transcript</h3>
-            <div class="transcript-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
-                @if (transcriptSegments.Any())
+    <!-- Debug Panel (Collapsible) -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header" style="cursor: pointer;" @onclick="ToggleDebugPanel">
+                    <strong>🔍 Debug Information</strong>
+                    <small class="float-end">@(showDebugPanel ? "▼ Hide" : "▶ Show")</small>
+                </div>
+                @if (showDebugPanel)
                 {
-                    @foreach (var segment in transcriptSegments)
-                    {
-                        <div class="transcript-segment mb-2">
-                            <strong>@segment.SpeakerName (@segment.Timestamp.ToString("HH:mm:ss")):</strong>
-                            <p>@segment.Content</p>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Configuration</h6>
+                                <ul class="small mb-3">
+                                    <li><strong>SSO Enabled:</strong> @ssoEnabled</li>
+                                    <li><strong>Is In Teams:</strong> @isInTeams</li>
+                                    <li><strong>Use Fallback:</strong> @useFallbackMode</li>
+                                    <li><strong>Is Interactive:</strong> @isInteractive</li>
+                                    <li><strong>First Render Complete:</strong> @firstRenderComplete</li>
+                                </ul>
+
+                                <h6>Teams Context</h6>
+                                @if (teamsContext != null)
+                                {
+                                    <ul class="small mb-3">
+                                        <li><strong>User ID:</strong> @(teamsContext.UserId ?? "null")</li>
+                                        <li><strong>User Name:</strong> @(teamsContext.UserName ?? "null")</li>
+                                        <li><strong>Meeting ID:</strong> @(teamsContext.MeetingId ?? "null")</li>
+                                        <li><strong>Tenant ID:</strong> @(teamsContext.TenantId ?? "null")</li>
+                                        <li><strong>App ID:</strong> @(teamsContext.AppId ?? "null")</li>
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <p class="small text-muted">No Teams context available</p>
+                                }
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Initialization Steps</h6>
+                                <ul class="small mb-3">
+                                    @foreach (var step in debugSteps)
+                                    {
+                                        <li class="@(step.IsError ? "text-danger" : step.IsComplete ? "text-success" : "text-muted")">
+                                            @(step.IsComplete ? "✅" : step.IsError ? "❌" : "⏳") @step.Message
+                                            @if (!string.IsNullOrEmpty(step.Details))
+                                            {
+                                                <br />
+                                    
+                                                <small>@step.Details</small>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+
+                                <h6>Transcript Segments (@transcriptSegments.Count total)</h6>
+                                <div class="small mb-3" style="max-height: 200px; overflow-y: auto;">
+                                    @if (transcriptSegments.Any())
+                                    {
+                                        <table class="table table-sm table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Speaker</th>
+                                                    <th>Speaker ID</th>
+                                                    <th>Role</th>
+                                                    <th>Content</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var seg in transcriptSegments.TakeLast(10))
+                                                {
+                                                    <tr>
+                                                        <td>@seg.SpeakerName</td>
+                                                        <td><code>@seg.SpeakerId.Substring(0, Math.Min(8, seg.SpeakerId.Length))</code></td>
+                                                        <td><span class="badge bg-@(seg.Role == SpeakerRole.Interviewer ? "primary" : "success")">@seg.Role</span></td>
+                                                        <td>@(seg.Content.Length > 30 ? seg.Content.Substring(0, 30) + "..." : seg.Content)</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                    else
+                                    {
+                                        <p class="text-muted">No segments yet</p>
+                                    }
+                                </div>
+
+                                <button class="btn btn-sm btn-info" @onclick="RefreshDebugInfo">🔄 Refresh Debug Info</button>
+                                <button class="btn btn-sm btn-secondary" @onclick="CopyDebugInfo">📋 Copy to Clipboard</button>
+                            </div>
                         </div>
-                    }
-                }
-                else
-                {
-                    <p class="text-muted">No transcript available yet. Start monitoring a meeting to see live updates.</p>
-                }
-            </div>
-        </div>
-        
-        <div class="col-md-4">
-            <h3>Suggested Questions</h3>
-            <div class="questions-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
-                @if (questionSuggestions.Any())
-                {
-                    @foreach (var question in questionSuggestions)
-                    {
-                        <div class="question-suggestion mb-3 p-2" style="border-left: 3px solid #0078d4;">
-                            <p><strong>@question.Question</strong></p>
-                            <small class="text-muted">@question.Context | Confidence: @((question.Confidence * 100).ToString("F0"))%</small>
-                        </div>
-                    }
-                }
-                else
-                {
-                    <p class="text-muted">Question suggestions will appear here during the meeting.</p>
+                    </div>
                 }
             </div>
         </div>
     </div>
-    
+
+    <!-- SSO Status Banner -->
+    <div class="row mb-3">
+        <div class="col-12">
+            @if (ssoEnabled && teamsContext != null)
+            {
+                <div class="alert alert-info">
+                    <strong>Teams SSO Active</strong><br />
+                    User: @teamsContext.UserName (@teamsContext.UserId)<br />
+                    @if (!string.IsNullOrEmpty(teamsContext.MeetingId))
+                    {
+                        <span>Meeting: @teamsContext.MeetingId</span>
+                    }
+                </div>
+            }
+            else if (ssoEnabled && !isInTeams)
+            {
+                <div class="alert alert-warning">
+                    <strong>Not running in Teams</strong><br />
+                    SSO is enabled but app is not running inside Microsoft Teams. Using fallback mode for debugging.
+                    <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="ToggleFallbackMode">
+                        @(useFallbackMode ? "Disable" : "Enable") Fallback Mode
+                    </button>
+                </div>
+            }
+            else if (!ssoEnabled)
+            {
+                <div class="alert alert-secondary">
+                    <strong>Debugging Mode</strong> - SSO is disabled in configuration
+                </div>
+            }
+        </div>
+    </div>
+
+
+    <!-- Meeting Transcript -->
+    <div class="row">
+        <div class="col-md-12">
+            <h3>Meeting Transcript</h3>
+            <div class="transcript-container" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f9f9f9;">
+                @if (transcriptSegments.Any())
+                {
+                    @foreach (var segment in transcriptSegments.OrderBy(s => s.Timestamp))
+                    {
+                        @if (segment.Role == SpeakerRole.Interviewer)
+                        {
+                            <!-- Interviewer message - right-aligned -->
+                            <div class="d-flex justify-content-end mb-3">
+                                <div class="transcript-segment p-2" style="max-width: 70%; border-left: 4px solid #0078d4; background-color: #e3f2fd; border-radius: 8px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small class="text-muted me-2">@segment.Timestamp.ToString("HH:mm:ss")</small>
+                                        <strong style="color: #0078d4;">@segment.SpeakerName</strong>
+                                    </div>
+                                    <p class="mb-0">@segment.Content</p>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- Candidate message - left-aligned -->
+                            <div class="d-flex justify-content-start mb-3">
+                                <div class="transcript-segment p-2" style="max-width: 70%; border-left: 4px solid #28a745; background-color: #e8f5e9; border-radius: 8px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <strong style="color: #28a745;">@segment.SpeakerName</strong>
+                                        <small class="text-muted ms-2">@segment.Timestamp.ToString("HH:mm:ss")</small>
+                                    </div>
+                                    <p class="mb-0">@segment.Content</p>
+                                </div>
+                            </div>
+                        }
+                    }
+                }
+                else
+                {
+                    <div class="text-center text-muted mt-5">
+                        <p>No transcript segments yet.</p>
+                        <p>Start monitoring a meeting to see live conversation updates.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <h3>AI-Generated Follow-up Questions</h3>
+            <div class="questions-container" style="height: 250px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #fff9e6;">
+                @if (questionSuggestions.Any())
+                {
+                    @foreach (var question in questionSuggestions)
+                    {
+                        <div class="question-suggestion mb-3 p-3" style="border-left: 4px solid #ffc107; background-color: white;">
+                            <p class="mb-1"><strong>@question.Question</strong></p>
+                            <small class="text-muted">@question.Rationale | Category: @question.Category | Confidence: @((question.ConfidenceScore * 100).ToString("F0"))%</small>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted">AI-generated question suggestions will appear here based on the conversation.</p>
+                }
+            </div>
+        </div>
+    </div>
+
     <div class="row mt-4">
         <div class="col-md-12">
             <div class="meeting-controls">
                 <!-- Connection Status -->
                 <div class="alert alert-light mb-3">
                     <small>
-                        <strong>Connection Status:</strong> 
+                        <strong>Connection Status:</strong>
                         <span class="@GetConnectionStatusClass()">
                             @GetConnectionStatusText()
                         </span>
@@ -66,59 +227,58 @@
 
                 <div class="input-group mb-3">
                     <input @bind="meetingId" class="form-control" placeholder="Enter Teams Meeting URL or ID" />
-                    <input @bind="userId" class="form-control" placeholder="Enter User ID (optional)" />
-                    <button class="btn btn-primary" @onclick="StartMonitoring" disabled="@isMonitoring">
-                        @if (isMonitoring)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2"></span>
-                        }
-                        Start Monitoring
-                    </button>
+                    @if (!ssoEnabled || useFallbackMode || !isInTeams)
+                    {
+                        <!-- Fallback Mode: Manual entry -->
+                        <input @bind="userId" class="form-control" placeholder="Enter User ID (optional)" />
+                        <button class="btn btn-primary" @onclick="StartMonitoringManual" disabled="@isMonitoring">
+                            @if (isMonitoring)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Start Monitoring (Manual)
+                        </button>
+                    }
+                    else
+                    {
+                        <!-- SSO Mode: Automatic -->
+                        <button class="btn btn-success" @onclick="StartMonitoringWithSSO" disabled="@isMonitoring">
+                            @if (isMonitoring)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Start Monitoring (SSO)
+                        </button>
+                    }
+
                     <button class="btn btn-secondary" @onclick="StopMonitoring" disabled="@(!isMonitoring)">
                         Stop Monitoring
                     </button>
-                    <button class="btn btn-info" @onclick="TestSignalR" disabled="@string.IsNullOrWhiteSpace(currentMeetingId)">
-                        Test SignalR
-                    </button>
-                    <button class="btn btn-outline-secondary" @onclick="RetrySignalRConnection">
-                        Retry Connection
-                    </button>
-                    <button class="btn btn-outline-primary" @onclick="TestApiConnection">
-                        Test API
-                    </button>
-                    <button class="btn btn-outline-info" @onclick="SimpleTest">
-                        Simple Test
-                    </button>
                 </div>
-                
-                <!-- HTML-only test button (should work even if Blazor is broken) -->
-                <div class="mb-3">
-                    <button type="button" class="btn btn-warning" onclick="testHtmlButton()">
-                        HTML Test (No Blazor)
-                    </button>
-                    <span id="htmlTestResult" class="ms-2"></span>
-                </div>
-                
+
                 @if (!string.IsNullOrEmpty(statusMessage))
                 {
                     <div class="alert @(statusMessage.Contains("Error") || statusMessage.Contains("failed") ? "alert-danger" : "alert-info")">
                         @statusMessage
                     </div>
                 }
-                
+
                 @if (!string.IsNullOrEmpty(currentMeetingId))
                 {
                     <div class="alert alert-success">
                         <strong>Monitoring:</strong> @currentMeetingId
                         @if (!string.IsNullOrEmpty(currentMeetingUrl))
                         {
-                            <br/><small>URL: @currentMeetingUrl</small>
+                            <br />
+                    
+                            <small>URL: @currentMeetingUrl</small>
                         }
                     </div>
                 }
             </div>
         </div>
     </div>
+
 </div>
 
 @code {
@@ -126,82 +286,347 @@
     private List<TranscriptSegment> transcriptSegments = new();
     private List<QuestionSuggestion> questionSuggestions = new();
     private string meetingId = "";
-    private string userId = ""; // In real app, get from auth context
+    private string userId = "";
     private string currentMeetingId = "";
     private string currentMeetingUrl = "";
     private bool isMonitoring = false;
-    private string statusMessage = "Page loaded - ready for testing";
+    private string statusMessage = "";
     private bool isInteractive = false;
+
+    // SSO-related fields
+    private bool ssoEnabled = true;
+    private bool isInTeams = false;
+    private bool useFallbackMode = false;
+    private TeamsContextInfo? teamsContext = null;
+    private string? ssoToken = null;
+
+    // Debug fields
+    private bool showDebugPanel = true;
+    private bool firstRenderComplete = false;
+    private List<DebugStep> debugSteps = new();
+    private System.Text.Json.JsonElement? jsDebugInfo = null;
 
     protected override void OnInitialized()
     {
-        statusMessage = "SignalR disabled for testing - ready for API calls";
-        StateHasChanged();
+        AddDebugStep("Component initialized", "OnInitialized() called");
+
+        ssoEnabled = Configuration.GetSection("AzureAd:EnableSso").Value?.ToLower() != "false";
+        statusMessage = ssoEnabled ? "Initializing..." : "SSO disabled - using fallback mode";
+
+        AddDebugStep($"SSO configuration loaded", $"Enabled: {ssoEnabled}");
+        _logger.LogInformation("Meeting page initialized. SSO Enabled: {SsoEnabled}", ssoEnabled);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            firstRenderComplete = true;
+            AddDebugStep("First render completed", "OnAfterRenderAsync(firstRender=true) called");
+
             isInteractive = true;
-            await JSRuntime.InvokeVoidAsync("console.log", "=== Component is now interactive ===");
-            statusMessage = "Component is now interactive - buttons should work";
-            StateHasChanged();
-        }
-    }
 
-    private async Task TestApiConnection()
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("console.log", "=== TEST API BUTTON CLICKED ===");
-
-            statusMessage = "Testing API connection...";
-            StateHasChanged();
-
-            var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
-            var baseAddress = httpClient.BaseAddress?.ToString() ?? "No base address set";
-            statusMessage = $"Testing connection to: {baseAddress}";
-            StateHasChanged();
-
-            await JSRuntime.InvokeVoidAsync("console.log", $"Testing endpoint: {baseAddress}");
-
-            var response = await httpClient.GetAsync("/");
-            await JSRuntime.InvokeVoidAsync("console.log", $"Response status: {response.StatusCode}");
-
-            if (response.IsSuccessStatusCode)
+            // Now we can safely call JavaScript
+            if (ssoEnabled)
             {
-                var content = await response.Content.ReadAsStringAsync();
-                statusMessage = $"API connection successful: {content}";
-                await JSRuntime.InvokeVoidAsync("console.log", $"Success! Response: {content}");
+                try
+                {
+                    statusMessage = "Initializing Teams SSO...";
+                    AddDebugStep("Starting Teams initialization", "Calling InitializeTeamsAsync()");
+                    StateHasChanged();
+
+                    // Try to initialize Teams SDK
+                    await InitializeTeamsAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to initialize Teams SDK - not running in Teams");
+                    AddDebugStep("Teams initialization failed", $"Exception: {ex.Message}", isError: true);
+                    isInTeams = false;
+                    useFallbackMode = true;
+                    statusMessage = "Not running in Teams - fallback mode enabled";
+                }
             }
             else
             {
-                statusMessage = $"API connection failed with status: {response.StatusCode}";
+                AddDebugStep("SSO disabled", "Skipping Teams initialization");
             }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task InitializeTeamsAsync()
+    {
+        try
+        {
+            AddDebugStep("Checking Teams SDK availability", "Calling JS teamsAuth.isInTeams()");
+
+            await JSRuntime.InvokeVoidAsync("console.log", "=== C# SIDE: Checking if Teams SDK is available ===");
+
+            // Check if Teams SDK is available
+            isInTeams = await JSRuntime.InvokeAsync<bool>("teamsAuth.isInTeams");
+
+            AddDebugStep($"Teams SDK check result", $"isInTeams: {isInTeams}");
+
+            if (!isInTeams)
+            {
+                _logger.LogInformation("Not running inside Microsoft Teams");
+                AddDebugStep("Not in Teams", "Teams SDK not available");
+                useFallbackMode = true;
+                statusMessage = "Not in Teams - using manual mode";
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync("console.log", "=== C# SIDE: Teams SDK detected, initializing ===");
+            AddDebugStep("Teams SDK detected", "Calling JS teamsAuth.initialize()");
+
+            // Initialize Teams SDK and get context
+            var contextJson = await JSRuntime.InvokeAsync<System.Text.Json.JsonElement>("teamsAuth.initialize");
+
+            AddDebugStep("Teams SDK initialized", "Context received from JS");
+
+            if (contextJson.ValueKind != System.Text.Json.JsonValueKind.Undefined)
+            {
+                await JSRuntime.InvokeVoidAsync("console.log", "=== C# SIDE: Teams contextl ===", JsonSerializer.Serialize(contextJson));
+                // Parse the Teams context
+                teamsContext = new TeamsContextInfo
+                {
+                    UserId = contextJson.TryGetProperty("user", out var user) && user.TryGetProperty("id", out var userIdProp)
+                        ? userIdProp.GetString() : null,
+                    UserName = user.TryGetProperty("userPrincipalName", out var upn)
+                        ? upn.GetString() : null,
+                    MeetingId = contextJson.TryGetProperty("meeting", out var meeting) && meeting.TryGetProperty("id", out var meetingIdProp)
+                        ? meetingIdProp.GetString() : null,
+                    TenantId = user.TryGetProperty("tenant", out var tenant) && tenant.TryGetProperty("id", out var tenantIdProp)
+                        ? tenantIdProp.GetString() : null,
+                    AppId = user.TryGetProperty("app", out var app) && app.TryGetProperty("id", out var appIdProp)
+                        ? appIdProp.GetString() : null
+                };
+
+                _logger.LogInformation("Teams context retrieved: User={UserId}, Meeting={MeetingId}",
+                    teamsContext.UserId, teamsContext.MeetingId);
+
+                var contextDetails = $"User: {teamsContext.UserId}, Meeting: {teamsContext.MeetingId ?? "none"}";
+                AddDebugStep("Teams context parsed", contextDetails);
+
+                statusMessage = $"Connected to Teams as {teamsContext.UserName ?? teamsContext.UserId}";
+
+                await JSRuntime.InvokeVoidAsync("console.log", "=== C# SIDE: Teams initialization successful ===", teamsContext);
+            }
+            else
+            {
+                AddDebugStep("Context parse failed", "Received undefined context from JS", isError: true);
+            }
+        }
+        catch (JSException jsEx)
+        {
+            _logger.LogError(jsEx, "JavaScript error during Teams initialization");
+            AddDebugStep("JS Exception during init", $"{jsEx.Message}", isError: true);
+            isInTeams = false;
+            useFallbackMode = true;
+            statusMessage = $"Teams initialization failed: {jsEx.Message}";
+            await JSRuntime.InvokeVoidAsync("console.error", "=== C# SIDE: Teams init error ===", jsEx.Message);
         }
         catch (Exception ex)
         {
-            statusMessage = $"API connection failed: {ex.Message}";
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error: {ex.Message}");
+            _logger.LogError(ex, "Error initializing Teams");
+            AddDebugStep("Exception during init", $"{ex.GetType().Name}: {ex.Message}", isError: true);
+            isInTeams = false;
+            useFallbackMode = true;
+            statusMessage = $"Teams initialization failed: {ex.Message}";
+        }
+    }
+
+    private async Task RefreshDebugInfo()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "=== C# SIDE: Refreshing debug info ===");
+
+            // Get comprehensive debug info from JavaScript
+            jsDebugInfo = await JSRuntime.InvokeAsync<System.Text.Json.JsonElement>("teamsAuth.getDebugInfo");
+
+            AddDebugStep("Debug info refreshed", "Retrieved latest status from JS");
+
+            _logger.LogInformation("Debug info refreshed: {@DebugInfo}", jsDebugInfo);
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            AddDebugStep("Failed to refresh debug info", ex.Message, isError: true);
+            _logger.LogError(ex, "Failed to refresh debug info");
+        }
+    }
+
+    private async Task CopyDebugInfo()
+    {
+        try
+        {
+            var debugText = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                ComponentState = new
+                {
+                    ssoEnabled,
+                    isInTeams,
+                    useFallbackMode,
+                    isInteractive,
+                    firstRenderComplete,
+                    teamsContext
+                },
+                DebugSteps = debugSteps,
+                JavaScriptDebugInfo = jsDebugInfo
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", debugText);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to copy debug info");
+            await JSRuntime.InvokeVoidAsync("alert", $"Failed to copy: {ex.Message}");
+        }
+    }
+
+    private void ToggleDebugPanel()
+    {
+        showDebugPanel = !showDebugPanel;
+    }
+
+    private void AddDebugStep(string message, string? details = null, bool isError = false)
+    {
+        debugSteps.Add(new DebugStep
+        {
+            Timestamp = DateTime.Now,
+            Message = message,
+            Details = details,
+            IsComplete = !isError,
+            IsError = isError
+        });
+
+        _logger.LogInformation("[DEBUG STEP] {Message} - {Details}", message, details);
+    }
+
+    private async Task StartMonitoringWithSSO()
+    {
+        AddDebugStep("Starting SSO monitoring", "StartMonitoringWithSSO() called");
+
+        if (!isInTeams)
+        {
+            statusMessage = "Not running in Teams - use manual mode";
+            AddDebugStep("SSO monitoring aborted", "Not running in Teams", isError: true);
+            return;
+        }
+
+        try
+        {
+            isMonitoring = true;
+            statusMessage = "Acquiring SSO token...";
+            AddDebugStep("Acquiring SSO token", "Calling JS teamsAuth.getAuthToken()");
+            StateHasChanged();
+
+            await JSRuntime.InvokeVoidAsync("console.log", "=== C# SIDE: Requesting SSO token ===");
+
+            // Get SSO token from Teams with better error handling
+            try
+            {
+                ssoToken = await JSRuntime.InvokeAsync<string>("teamsAuth.getAuthToken");
+            }
+            catch (JSException jsEx)
+            {
+                // Try to extract meaningful error information
+                var errorMessage = jsEx.Message;
+                await JSRuntime.InvokeVoidAsync("console.error", "=== C# SIDE: SSO Token Error ===", errorMessage);
+
+                AddDebugStep("SSO token acquisition failed (JS Exception)",
+                    $"Message: {errorMessage}", isError: true);
+
+                statusMessage = $"SSO token failed: {errorMessage}. Check browser console for details.";
+                isMonitoring = false;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(ssoToken))
+            {
+                statusMessage = "Failed to acquire SSO token";
+                AddDebugStep("SSO token acquisition failed", "Token is null or empty", isError: true);
+                isMonitoring = false;
+                return;
+            }
+
+            _logger.LogInformation("SSO token acquired (length: {Length})", ssoToken.Length);
+            AddDebugStep("SSO token acquired", $"Token length: {ssoToken.Length}");
+            statusMessage = "SSO token acquired, starting monitoring...";
+            StateHasChanged();
+
+            // Use meeting ID from Teams context if available
+            var meetingIdToUse = teamsContext?.MeetingId ?? meetingId;
+
+            if (string.IsNullOrEmpty(meetingIdToUse))
+            {
+                statusMessage = "No meeting ID available. Please join a meeting first.";
+                AddDebugStep("No meeting ID", "Teams context has no meeting ID", isError: true);
+                isMonitoring = false;
+                return;
+            }
+
+            AddDebugStep("Calling API", $"POST /api/meeting/start with meeting ID: {meetingIdToUse}");
+
+            // Call API with SSO token
+            var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
+            var requestBody = new
+            {
+                meetingId = meetingIdToUse,
+                idToken = ssoToken,  // Send SSO token to API
+                useWebhooks = true,
+                pollingIntervalSeconds = 10
+            };
+
+            var response = await httpClient.PostAsJsonAsync("/api/meeting/start", requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<StartMonitoringResponse>();
+
+                if (result != null)
+                {
+                    currentMeetingId = result.MeetingId;
+                    currentMeetingUrl = result.MeetingUrl ?? "";
+                    statusMessage = $"✅ {result.Message}";
+                    AddDebugStep("API call successful", $"Meeting: {result.MeetingId}");
+
+                    await InitializeCustomSignalR();
+                }
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                statusMessage = $"Error: {error}";
+                AddDebugStep("API call failed", $"Status: {response.StatusCode}, Error: {error}", isError: true);
+                isMonitoring = false;
+            }
+        }
+        catch (JSException jsEx)
+        {
+            _logger.LogError(jsEx, "JavaScript error during SSO monitoring");
+            AddDebugStep("JS Exception in SSO monitoring",
+                $"Message: {jsEx.Message}, InnerException: {jsEx.InnerException?.Message ?? "none"}",
+                isError: true);
+            statusMessage = $"JavaScript Error: {jsEx.Message}. Check browser console (F12) for details.";
+            isMonitoring = false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error starting monitoring with SSO");
+            AddDebugStep("Exception in SSO monitoring", $"{ex.GetType().Name}: {ex.Message}", isError: true);
+            statusMessage = $"Error: {ex.Message}";
+            isMonitoring = false;
         }
 
         StateHasChanged();
     }
 
-    private async Task SimpleTest()
-    {
-        statusMessage = $"Simple test clicked at {DateTime.Now:HH:mm:ss}";
-        StateHasChanged();
-
-        await JSRuntime.InvokeVoidAsync("console.log", "Simple test button was clicked");
-
-        var apiBaseUrl = Configuration["ApiBaseUrl"];
-        var skipSignalR = Configuration["SkipSignalR"];
-        statusMessage += $" | API URL: {apiBaseUrl} | Skip SignalR: {skipSignalR}";
-    }
-
-    private async Task StartMonitoring()
+    private async Task StartMonitoringManual()
     {
         if (string.IsNullOrWhiteSpace(meetingId))
         {
@@ -210,59 +635,56 @@
         }
 
         isMonitoring = true;
-        statusMessage = "Starting monitoring...";
+        statusMessage = "Starting monitoring (manual mode)...";
         StateHasChanged();
 
         try
         {
-            await JSRuntime.InvokeVoidAsync("console.log", $"Starting monitoring for: {meetingId}, userId: {userId}");
-            
             var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
-            var requestBody = new 
-            { 
-                meetingId = meetingId, 
-                UserId = string.IsNullOrWhiteSpace(userId) ? null : userId,
-                UseWebhooks = true,
-                PollingIntervalSeconds = 5
+            var requestBody = new
+            {
+                meetingId = meetingId,
+                userId = string.IsNullOrWhiteSpace(userId) ? null : userId,
+                idToken = (string?)null,  // No SSO token in manual mode
+                useWebhooks = true,
+                pollingIntervalSeconds = 10
             };
-            
-            await JSRuntime.InvokeVoidAsync("console.log", $"Sending request to: {httpClient.BaseAddress}/api/meeting/start");
-            
+
             var response = await httpClient.PostAsJsonAsync("/api/meeting/start", requestBody);
-            
-            await JSRuntime.InvokeVoidAsync("console.log", $"API Response: {response.StatusCode}");
 
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<StartMonitoringResponse>();
-                
+
                 if (result != null)
                 {
                     currentMeetingId = result.MeetingId;
                     currentMeetingUrl = result.MeetingUrl ?? "";
-                    
-                    statusMessage = $"{result.Message}";
-                    await JSRuntime.InvokeVoidAsync("console.log", $"Meeting monitoring started: {result.MeetingId}");
-                    
-                    // Now that monitoring is started, enable the custom SignalR connection
+                    statusMessage = $"✅ {result.Message}";
+
                     await InitializeCustomSignalR();
                 }
             }
             else
             {
                 var error = await response.Content.ReadAsStringAsync();
-                statusMessage = $"Error starting monitoring (Status: {response.StatusCode}): {error}";
-                await JSRuntime.InvokeVoidAsync("console.error", $"API Error: {error}");
+                statusMessage = $"Error: {error}";
                 isMonitoring = false;
             }
         }
         catch (Exception ex)
         {
             statusMessage = $"Error: {ex.Message}";
-            await JSRuntime.InvokeVoidAsync("console.error", $"Exception: {ex.Message}");
             isMonitoring = false;
         }
 
+        StateHasChanged();
+    }
+
+    private void ToggleFallbackMode()
+    {
+        useFallbackMode = !useFallbackMode;
+        statusMessage = useFallbackMode ? "Switched to manual mode" : "Switched to SSO mode";
         StateHasChanged();
     }
 
@@ -271,7 +693,7 @@
         try
         {
             await JSRuntime.InvokeVoidAsync("console.log", "Stopping meeting monitoring...");
-            
+
             var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
             var requestBody = new { MeetingId = currentMeetingId };
             var response = await httpClient.PostAsJsonAsync("/api/meeting/stop", requestBody);
@@ -280,13 +702,14 @@
             {
                 statusMessage = "Monitoring stopped";
                 await JSRuntime.InvokeVoidAsync("console.log", "Meeting monitoring stopped successfully");
-                
+
                 // Clear transcript and questions
                 transcriptSegments.Clear();
                 questionSuggestions.Clear();
                 currentMeetingId = "";
                 currentMeetingUrl = "";
-                
+                ssoToken = null;
+
                 // Disconnect custom SignalR
                 if (hubConnection != null)
                 {
@@ -312,71 +735,13 @@
         StateHasChanged();
     }
 
-    private async Task TestSignalR()
-    {
-        if (string.IsNullOrWhiteSpace(currentMeetingId))
-        {
-            statusMessage = "Please start monitoring a meeting first";
-            return;
-        }
-
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("console.log", "Testing custom SignalR connection...");
-
-            // First check if we have a connection
-            if (hubConnection?.State == HubConnectionState.Connected)
-            {
-                await JSRuntime.InvokeVoidAsync("console.log", "SignalR is connected, joining meeting group...");
-                await hubConnection.InvokeAsync("JoinMeeting", currentMeetingId);
-            }
-            else
-            {
-                await JSRuntime.InvokeVoidAsync("console.warn", $"SignalR not connected (State: {hubConnection?.State})");
-                statusMessage = $"SignalR not connected (State: {hubConnection?.State}) - cannot test";
-                StateHasChanged();
-                return;
-            }
-
-            // Call the test endpoint on the API
-            var httpClient = HttpClientFactory.CreateClient("TeamsMeetingApi");
-            var response = await httpClient.PostAsync($"/api/meeting/test-signalr/{currentMeetingId}", null);
-
-            if (response.IsSuccessStatusCode)
-            {
-                statusMessage = "✅ SignalR test message sent - check for incoming message";
-                await JSRuntime.InvokeVoidAsync("console.log", "SignalR test message sent successfully");
-            }
-            else
-            {
-                var error = await response.Content.ReadAsStringAsync();
-                statusMessage = $"❌ Failed to send test message: {error}";
-                await JSRuntime.InvokeVoidAsync("console.error", $"Test SignalR error: {error}");
-            }
-        }
-        catch (Exception ex)
-        {
-            statusMessage = $"❌ SignalR test error: {ex.Message}";
-            await JSRuntime.InvokeVoidAsync("console.error", $"Test SignalR exception: {ex.Message}");
-        }
-
-        StateHasChanged();
-    }
-
-    private async Task RetrySignalRConnection()
-    {
-        await JSRuntime.InvokeVoidAsync("console.log", "RetrySignalRConnection clicked");
-        statusMessage = "✅ Retry Connection clicked - method executing";
-        StateHasChanged();
-    }
-
     private string GetConnectionStatusText()
     {
         if (hubConnection == null)
         {
             return "Not initialized";
         }
-        
+
         return hubConnection.State switch
         {
             HubConnectionState.Connected => "Connected to API",
@@ -393,12 +758,12 @@
         {
             return "text-muted";
         }
-        
+
         return hubConnection.State switch
         {
             HubConnectionState.Connected => "text-success",
             HubConnectionState.Connecting => "text-warning",
-            HubConnectionState.Reconnecting => "text-warning", 
+            HubConnectionState.Reconnecting => "text-warning",
             HubConnectionState.Disconnected => "text-danger",
             _ => "text-muted"
         };
@@ -417,8 +782,7 @@
         try
         {
             await JSRuntime.InvokeVoidAsync("console.log", "Initializing custom SignalR connection to API...");
-            
-            // Only initialize if SkipSignalR is not true
+
             var skipSignalR = Configuration["SkipSignalR"] == "true";
             if (skipSignalR)
             {
@@ -428,11 +792,10 @@
 
             var apiBaseUrl = Configuration["ApiBaseUrl"] ?? "https://localhost:7128";
             await JSRuntime.InvokeVoidAsync("console.log", $"Connecting to SignalR hub at: {apiBaseUrl}/transcripthub");
-            
+
             hubConnection = new HubConnectionBuilder()
                 .WithUrl($"{apiBaseUrl}/transcripthub", options =>
                 {
-                    // Use LongPolling for better reliability with dev tunnels
                     options.SkipNegotiation = false;
                     options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
                     options.CloseTimeout = TimeSpan.FromSeconds(10);
@@ -443,8 +806,16 @@
             // Handle new transcript segments
             hubConnection.On<TranscriptSegment>("NewTranscript", async (segment) =>
             {
-                await JSRuntime.InvokeVoidAsync("console.log", $"Received transcript: {segment.SpeakerName}: {segment.Content}");
+                await JSRuntime.InvokeVoidAsync("console.log",
+                    $"[SIGNALR] Received transcript: {segment.SpeakerName} (ID: {segment.SpeakerId}, Role: {segment.Role}): {segment.Content.Substring(0, Math.Min(50, segment.Content.Length))}...");
+
+                // ⚠️ DEBUG BREAKPOINT: Set breakpoint on next line to inspect segment.Role
+                // Roles are assigned by the API based on OBO token or first speaker
                 transcriptSegments.Add(segment);
+
+                _logger.LogInformation("[SIGNALR] Added segment - Speaker: {Speaker}, Role: {Role}, Total segments: {Count}",
+                    segment.SpeakerName, segment.Role, transcriptSegments.Count);
+
                 await InvokeAsync(StateHasChanged);
             });
 
@@ -486,7 +857,7 @@
                 await JSRuntime.InvokeVoidAsync("console.log", $"Custom SignalR reconnected: {connectionId}");
                 statusMessage = "SignalR reconnected successfully";
                 await InvokeAsync(StateHasChanged);
-                
+
                 // Rejoin the meeting group after reconnection
                 if (!string.IsNullOrWhiteSpace(currentMeetingId))
                 {
@@ -504,10 +875,10 @@
             // Connect to the hub
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await hubConnection.StartAsync(cts.Token);
-            
+
             // Join the meeting group
             await hubConnection.InvokeAsync("JoinMeeting", currentMeetingId);
-            
+
             await JSRuntime.InvokeVoidAsync("console.log", "Custom SignalR connected and joined meeting group");
             statusMessage = "Connected to SignalR hub and joined meeting";
             StateHasChanged();
@@ -527,27 +898,34 @@
     }
 
     // Model classes
+    public enum SpeakerRole
+    {
+        Interviewer,
+        Interviewee
+    }
+
     public class TranscriptSegment
     {
         public string Id { get; set; } = "";
         public string SpeakerName { get; set; } = "";
         public string SpeakerId { get; set; } = "";
-        public string Content { get; set; } = "";  // Changed from Text to Content
+        public string Content { get; set; } = "";
         public DateTimeOffset Timestamp { get; set; }
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
+        public SpeakerRole Role { get; set; } = SpeakerRole.Interviewee;
     }
 
     public class QuestionSuggestion
     {
         public string Id { get; set; } = "";
         public string Question { get; set; } = "";
-        public string Context { get; set; } = "";
+        public string Rationale { get; set; } = "";
         public string Category { get; set; } = "";
-        public float Confidence { get; set; }
+        public float ConfidenceScore { get; set; }
         public DateTimeOffset GeneratedAt { get; set; }
     }
-    
+
     public class StartMonitoringResponse
     {
         public string MeetingId { get; set; } = "";
@@ -564,5 +942,23 @@
     {
         public bool Enabled { get; set; }
         public string? SubscriptionId { get; set; }
+    }
+
+    public class TeamsContextInfo
+    {
+        public string? UserId { get; set; }
+        public string? UserName { get; set; }
+        public string? MeetingId { get; set; }
+        public string? TenantId { get; set; }
+        public string? AppId { get; set; }
+    }
+
+    public class DebugStep
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; } = "";
+        public string? Details { get; set; }
+        public bool IsComplete { get; set; }
+        public bool IsError { get; set; }
     }
 }

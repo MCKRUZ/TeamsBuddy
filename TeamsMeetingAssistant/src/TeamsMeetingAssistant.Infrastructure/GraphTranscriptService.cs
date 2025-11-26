@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using Polly;
 using Polly.Retry;
-using Microsoft.Kiota.Abstractions;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace TeamsMeetingAssistant.Infrastructure;
 
@@ -19,6 +19,19 @@ public class GraphTranscriptService : ITranscriptService
 
     // Track delta links per meeting for incremental queries
     private static readonly Dictionary<string, string> _deltaLinks = new();
+    
+    // Store the current access token (from OBO flow - delegated permissions)
+    private string? _delegatedAccessToken;
+    
+    // Store the user ID extracted from the delegated token
+    private string? _currentUserId;
+    
+    // Store the user's display name extracted from the delegated token (for role assignment)
+    private string? _currentUserDisplayName;
+    
+    // Cache for application token (for delta queries)
+    private string? _applicationAccessToken;
+    private DateTimeOffset _applicationTokenExpiry = DateTimeOffset.MinValue;
 
     public GraphTranscriptService(
         GraphServiceClient graphClient,
@@ -45,17 +58,157 @@ public class GraphTranscriptService : ITranscriptService
                 });
     }
 
+    /// <summary>
+    /// Set the delegated access token (from SSO/OBO flow) to use for user-specific operations
+    /// Also extracts the user ID and display name from the token claims for role assignment
+    /// </summary>
+    public void SetAccessToken(string accessToken)
+    {
+        _delegatedAccessToken = accessToken;
+        
+        // Extract user ID and display name from token claims
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(accessToken);
+
+            // Try to get the OID (Object ID) claim - this is the user's unique ID in Azure AD
+            _currentUserId = jwtToken.Claims.FirstOrDefault(c => c.Type == "oid")?.Value;
+            
+            // Extract display name from token - try multiple claim types
+            // "name" claim typically contains the full display name (e.g., "Efrain Goyzueta")
+            _currentUserDisplayName = jwtToken.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
+            
+            // Fallback to "preferred_username" or "upn" if "name" is not available
+            if (string.IsNullOrEmpty(_currentUserDisplayName))
+            {
+                _currentUserDisplayName = jwtToken.Claims.FirstOrDefault(c => c.Type == "preferred_username")?.Value 
+                    ?? jwtToken.Claims.FirstOrDefault(c => c.Type == "upn")?.Value;
+            }
+            
+            if (!string.IsNullOrEmpty(_currentUserId))
+            {
+                _logger.LogInformation("Delegated access token set. User ID: {UserId}, Display Name: {DisplayName}", 
+                    _currentUserId, _currentUserDisplayName ?? "(not available)");
+            }
+            else
+            {
+                _logger.LogWarning("Delegated access token set but could not extract user ID from claims");
+            }
+            
+            if (string.IsNullOrEmpty(_currentUserDisplayName))
+            {
+                _logger.LogWarning("Could not extract display name from token claims for role assignment");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to extract user information from delegated access token");
+            _currentUserId = null;
+            _currentUserDisplayName = null;
+        }
+    }
+    
+    /// <summary>
+    /// Get the user ID for API calls - from token claims or fallback to configuration
+    /// </summary>
+    private string GetUserId()
+    {
+        // Prefer user ID from token claims
+        if (!string.IsNullOrEmpty(_currentUserId))
+        {
+            return _currentUserId;
+        }
+        
+        // Fallback to configured default (for debugging when SSO is disabled)
+        var fallbackUserId = _configuration["AzureAd:DefaultUserId"] ?? "aacdff60-4840-45f4-814e-4243bdd0636e";
+        
+        _logger.LogWarning("Using fallback user ID: {UserId} (token user ID not available)", fallbackUserId);
+        
+        return fallbackUserId;
+    }
+    
+    /// <summary>
+    /// Get an application-level access token for operations that don't support delegated context
+    /// (like delta queries)
+    /// </summary>
+    private async Task<string?> GetApplicationTokenAsync(CancellationToken cancellationToken)
+    {
+        // Return cached token if still valid
+        if (!string.IsNullOrEmpty(_applicationAccessToken) && DateTimeOffset.UtcNow < _applicationTokenExpiry.AddMinutes(-5))
+        {
+            _logger.LogDebug("Using cached application access token");
+            return _applicationAccessToken;
+        }
+
+        try
+        {
+            _logger.LogDebug("Acquiring new application access token for delta queries");
+            
+            var scope = "https://graph.microsoft.com/.default";
+            var tenantId = _configuration["AzureAd:TenantId"];
+            var clientId = _configuration["AzureAd:ClientId"];
+            var clientSecret = _configuration["AzureAd:ClientSecret"];
+
+            var tokenEndpoint = $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
+
+            using var httpClient = new HttpClient();
+
+            var tokenRequest = new Dictionary<string, string>
+            {
+                {"client_id", clientId!},
+                {"client_secret", clientSecret!},
+                {"scope", scope},
+                {"grant_type", "client_credentials"}
+            };
+
+            var tokenRequestContent = new FormUrlEncodedContent(tokenRequest);
+            var tokenResponse = await httpClient.PostAsync(tokenEndpoint, tokenRequestContent, cancellationToken);
+
+            if (tokenResponse.IsSuccessStatusCode)
+            {
+                var tokenResponseContent = await tokenResponse.Content.ReadAsStringAsync(cancellationToken);
+                using var jsonDoc = System.Text.Json.JsonDocument.Parse(tokenResponseContent);
+
+                if (jsonDoc.RootElement.TryGetProperty("access_token", out var accessTokenElement))
+                {
+                    _applicationAccessToken = accessTokenElement.GetString();
+
+                    if (jsonDoc.RootElement.TryGetProperty("expires_in", out var expiresInElement))
+                    {
+                        var expiresIn = expiresInElement.GetInt32();
+                        _applicationTokenExpiry = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+                        _logger.LogInformation("Successfully obtained application access token, expires in {ExpiresIn} seconds", expiresIn);
+                    }
+
+                    return _applicationAccessToken;
+                }
+            }
+            else
+            {
+                var errorContent = await tokenResponse.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Failed to obtain application access token: {StatusCode} - {Error}", 
+                    tokenResponse.StatusCode, errorContent);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error obtaining application access token");
+            return null;
+        }
+    }
+
     public async Task<IEnumerable<TranscriptSegment>> GetNewTranscriptSegmentsAsync(
         string meetingId,
         DateTimeOffset since,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
             _logger.LogDebug("Fetching transcripts for meeting {MeetingId} since {Since}", meetingId, since);
-
-            // Get user ID from configuration or use default
-            var userId = _configuration["AzureAd:DefaultUserId"] ?? "aacdff60-4840-45f4-814e-4243bdd0636";
 
             var allSegments = new List<TranscriptSegment>();
 
@@ -65,11 +218,11 @@ public class GraphTranscriptService : ITranscriptService
                 _logger.LogInformation("Using delta link for meeting {MeetingId} to fetch only changes", meetingId);
 
                 // Use delta query to get only changed transcripts
-                var deltaTranscripts = await GetTranscriptsDeltaAsync(userId, meetingId, deltaLink, cancellationToken);
+                var deltaTranscripts = await GetTranscriptsDeltaAsync(meetingId, deltaLink, cancellationToken);
 
                 if (deltaTranscripts != null)
                 {
-                    await ProcessTranscriptsAsync(deltaTranscripts.Transcripts, meetingId, userId, since, allSegments, cancellationToken);
+                    await ProcessTranscriptsAsync(deltaTranscripts.Transcripts, meetingId, since, allSegments, cancellationToken);
 
                     // Update delta link for next call
                     if (!string.IsNullOrEmpty(deltaTranscripts.DeltaLink))
@@ -84,11 +237,11 @@ public class GraphTranscriptService : ITranscriptService
                 _logger.LogInformation("No delta link found for meeting {MeetingId}, performing initial query", meetingId);
 
                 // First call - get all transcripts and establish delta link
-                var initialTranscripts = await GetTranscriptsInitialAsync(userId, meetingId, cancellationToken);
+                var initialTranscripts = await GetTranscriptsInitialAsync(meetingId, cancellationToken);
 
                 if (initialTranscripts != null)
                 {
-                    await ProcessTranscriptsAsync(initialTranscripts.Transcripts, meetingId, userId, since, allSegments, cancellationToken);
+                    await ProcessTranscriptsAsync(initialTranscripts.Transcripts, meetingId, since, allSegments, cancellationToken);
 
                     // Store delta link for subsequent calls
                     if (!string.IsNullOrEmpty(initialTranscripts.DeltaLink))
@@ -119,26 +272,31 @@ public class GraphTranscriptService : ITranscriptService
     }
 
     private async Task<TranscriptDeltaResult?> GetTranscriptsInitialAsync(
-        string userId,
         string meetingId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
             _logger.LogDebug("Fetching initial transcripts with delta for meeting {MeetingId}", meetingId);
 
+            // Get user ID from token claims or configuration
+            var userId = GetUserId();
+
+            // Get application token for delta query (getAllTranscripts requires application permissions)
+            var accessToken = await GetApplicationTokenAsync(cancellationToken);
+
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                _logger.LogError("Failed to get application access token for delta query");
+                _logger.LogInformation("Falling back to regular (non-delta) transcript fetch");
+                return await GetTranscriptsFallbackAsync(meetingId, cancellationToken);
+            }
+
             // Build the delta query URL - getAllTranscripts doesn't support OData filters
             var deltaUrl = $"https://graph.microsoft.com/v1.0/users/{userId}/onlineMeetings/getAllTranscripts(meetingOrganizerUserId='{userId}')";
 
             using var httpClient = new HttpClient();
-            var accessToken = await GetAccessTokenWithScopesAsync(cancellationToken);
-
-            if (string.IsNullOrEmpty(accessToken))
-            {
-                _logger.LogError("Failed to get access token for delta query");
-                return null;
-            }
-
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -148,7 +306,7 @@ public class GraphTranscriptService : ITranscriptService
             {
                 var error = await response.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogError("Delta query failed: {StatusCode} - {Error}", response.StatusCode, error);
-                return await GetTranscriptsFallbackAsync(userId, meetingId, cancellationToken);
+                return await GetTranscriptsFallbackAsync(meetingId, cancellationToken);
             }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -222,29 +380,31 @@ public class GraphTranscriptService : ITranscriptService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching initial transcripts with delta");
-            return await GetTranscriptsFallbackAsync(userId, meetingId, cancellationToken);
+            return await GetTranscriptsFallbackAsync(meetingId, cancellationToken);
         }
     }
 
     private async Task<TranscriptDeltaResult?> GetTranscriptsDeltaAsync(
-        string userId,
         string meetingId,
         string deltaLink,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
             _logger.LogDebug("Fetching delta transcripts for meeting {MeetingId} using delta link", meetingId);
 
-            using var httpClient = new HttpClient();
-            var accessToken = await GetAccessTokenWithScopesAsync(cancellationToken);
+            // Get application token for delta query
+            var accessToken = await GetApplicationTokenAsync(cancellationToken);
 
             if (string.IsNullOrEmpty(accessToken))
             {
-                _logger.LogError("Failed to get access token for delta query");
+                _logger.LogError("Failed to get application access token for delta query");
+                _deltaLinks.Remove(meetingId);
                 return null;
             }
 
+            using var httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -312,9 +472,9 @@ public class GraphTranscriptService : ITranscriptService
                 if (jsonDoc.RootElement.TryGetProperty("@odata.deltaLink", out var deltaLinkElement))
                 {
                     newDeltaLink = deltaLinkElement.GetString();
-                    _logger.LogInformation("Delta query complete: {Count} changed transcripts for meeting {MeetingId}, new delta link obtained with updated skipToken",
+                    _logger.LogInformation("Delta query complete: {Count} changed transcripts for meeting {MeetingId}, new delta link obtained",
                         matchingTranscripts.Count, meetingId);
-                    break; // We've reached the end
+                    break;
                 }
                 // Check for next link (more pages to fetch)
                 else if (jsonDoc.RootElement.TryGetProperty("@odata.nextLink", out var nextLinkElement))
@@ -324,7 +484,6 @@ public class GraphTranscriptService : ITranscriptService
                 }
                 else
                 {
-                    // No more pages and no delta link - keep the old delta link
                     _logger.LogWarning("No new delta link in response, keeping previous delta link");
                     newDeltaLink = deltaLink;
                     break;
@@ -352,29 +511,29 @@ public class GraphTranscriptService : ITranscriptService
             return new TranscriptDeltaResult
             {
                 Transcripts = resultTranscripts,
-                DeltaLink = newDeltaLink ?? deltaLink // Keep old delta link if no new one
+                DeltaLink = newDeltaLink ?? deltaLink
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching delta transcripts, will retry with initial query");
-
-            // If delta query fails, clear the delta link and retry with initial query
+            _logger.LogError(ex, "Error fetching delta transcripts");
             _deltaLinks.Remove(meetingId);
             return null;
         }
     }
 
     private async Task<TranscriptDeltaResult?> GetTranscriptsFallbackAsync(
-        string userId,
         string meetingId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
             _logger.LogInformation("Using fallback method to fetch transcripts for meeting {MeetingId}", meetingId);
 
-            // Use regular Graph SDK call
+            var userId = GetUserId();
+
+            // Use regular Graph SDK call with delegated token if available, otherwise application token
             var transcripts = await _graphClient.Users[userId]
                 .OnlineMeetings[meetingId]
                 .Transcripts
@@ -404,10 +563,10 @@ public class GraphTranscriptService : ITranscriptService
     private async Task ProcessTranscriptsAsync(
         List<Microsoft.Graph.Models.CallTranscript> transcripts,
         string meetingId,
-        string userId,
         DateTimeOffset since,
         List<TranscriptSegment> allSegments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (!transcripts.Any())
         {
@@ -417,14 +576,26 @@ public class GraphTranscriptService : ITranscriptService
 
         _logger.LogDebug("Processing {Count} transcript files for meeting {MeetingId}", transcripts.Count, meetingId);
 
+        var userId = GetUserId();
+        
+        // Get the interviewer display name from OBO token for role assignment
+        var interviewerDisplayName = _currentUserDisplayName;
+        
+        if (!string.IsNullOrEmpty(interviewerDisplayName))
+        {
+            _logger.LogInformation("Using OBO token display name for role assignment: '{DisplayName}'", interviewerDisplayName);
+        }
+        else
+        {
+            _logger.LogWarning("No OBO token display name available - role assignment will use first speaker fallback");
+        }
+
         foreach (var transcript in transcripts)
         {
             try
             {
                 _logger.LogDebug("Processing transcript {TranscriptId}", transcript.Id);
 
-                // Use transcript creation time as the base time for segment timestamps
-                // This ensures segment timestamps are absolute, not relative to 'since'
                 var transcriptBaseTime = transcript.CreatedDateTime ?? DateTimeOffset.UtcNow;
 
                 _logger.LogDebug("Using transcript base time: {BaseTime} for transcript {TranscriptId}",
@@ -433,7 +604,7 @@ public class GraphTranscriptService : ITranscriptService
                 // Use the transcriptContentUrl from the transcript response if available
                 if (!string.IsNullOrEmpty(transcript.TranscriptContentUrl))
                 {
-                    // Download transcript content using the URL
+                    // Download transcript content using the URL (prefer delegated token if available)
                     var transcriptContent = await DownloadTranscriptContentAsync(transcript.TranscriptContentUrl, cancellationToken);
 
                     if (string.IsNullOrEmpty(transcriptContent))
@@ -445,30 +616,23 @@ public class GraphTranscriptService : ITranscriptService
                     _logger.LogDebug("Processing transcript content of length {Length} for transcript {TranscriptId}",
                         transcriptContent.Length, transcript.Id);
 
-                    // Parse with transcript creation time as base
                     var segments = _vttParser.Parse(transcriptContent, transcriptBaseTime);
-
-                    // Filter segments that are newer than 'since' timestamp
-                    var filteredSegments = segments
-                        .Where(s => s.Timestamp > since)
-                        .ToList();
+                    
+                    // Assign roles based on interviewer display name from OBO token
+                    var segmentsWithRoles = AssignSpeakerRoles(segments, interviewerDisplayName, meetingId);
+                    
+                    var filteredSegments = segmentsWithRoles.Where(s => s.Timestamp > since).ToList();
 
                     if (filteredSegments.Any())
                     {
                         allSegments.AddRange(filteredSegments);
-
                         _logger.LogDebug("Added {Count} segments (filtered from {TotalCount}) from transcript {TranscriptId}",
                             filteredSegments.Count, segments.Count, transcript.Id);
-                    }
-                    else
-                    {
-                        _logger.LogDebug("No new segments after filtering by since={Since} for transcript {TranscriptId}",
-                            since, transcript.Id);
                     }
                 }
                 else
                 {
-                    // Fallback to direct content access through user context
+                    // Fallback to direct content access through Graph SDK
                     var transcriptContentStream = await _graphClient.Users[userId].OnlineMeetings[meetingId]
                         .Transcripts[transcript.Id]
                         .Content
@@ -489,50 +653,88 @@ public class GraphTranscriptService : ITranscriptService
                         continue;
                     }
 
-                    _logger.LogDebug("Processing VTT content of length {Length} for transcript {TranscriptId}",
-                        vttContent.Length, transcript.Id);
-
-                    // Parse with transcript creation time as base
                     var segments = _vttParser.Parse(vttContent, transcriptBaseTime);
-
-                    // Filter segments that are newer than 'since' timestamp
-                    var filteredSegments = segments
-                        .Where(s => s.Timestamp > since)
-                        .ToList();
+                    
+                    // Assign roles based on interviewer display name from OBO token
+                    var segmentsWithRoles = AssignSpeakerRoles(segments, interviewerDisplayName, meetingId);
+                    
+                    var filteredSegments = segmentsWithRoles.Where(s => s.Timestamp > since).ToList();
 
                     if (filteredSegments.Any())
                     {
                         allSegments.AddRange(filteredSegments);
-
-                        _logger.LogDebug("Added {Count} segments (filtered from {TotalCount}) from transcript {TranscriptId}",
-                            filteredSegments.Count, segments.Count, transcript.Id);
-                    }
-                    else
-                    {
-                        _logger.LogDebug("No new segments after filtering by since={Since} for transcript {TranscriptId}",
-                            since, transcript.Id);
+                        _logger.LogDebug("Added {Count} segments from transcript {TranscriptId}",
+                            filteredSegments.Count, transcript.Id);
                     }
                 }
             }
             catch (Exception transcriptEx)
             {
                 _logger.LogError(transcriptEx, "Error processing transcript {TranscriptId}", transcript.Id);
-                // Continue with other transcripts
             }
         }
     }
 
-    public async Task<MeetingInfo> GetMeetingInfoAsync(string joinWebUrl, string userId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Assigns speaker roles (Interviewer/Interviewee) based on display name matching
+    /// POC implementation: If speaker's display name matches the OBO token display name -> Interviewer, else -> Candidate
+    /// </summary>
+    private List<TranscriptSegment> AssignSpeakerRoles(
+        List<TranscriptSegment> segments, 
+        string? interviewerDisplayName,
+        string meetingId)
+    {
+        if (!segments.Any())
+        {
+            return segments;
+        }
+
+        // If no interviewer display name from OBO token, use first speaker as fallback
+        var effectiveInterviewerName = interviewerDisplayName;
+        
+        if (string.IsNullOrEmpty(effectiveInterviewerName))
+        {
+            // Fallback: Use first speaker's name as interviewer
+            effectiveInterviewerName = segments.First().SpeakerName;
+            _logger.LogWarning("No OBO token display name available for meeting {MeetingId}. Using first speaker '{SpeakerName}' as interviewer (fallback)", 
+                meetingId, effectiveInterviewerName);
+        }
+
+        var segmentsWithRoles = new List<TranscriptSegment>();
+        
+        foreach (var segment in segments)
+        {
+            // Compare speaker name/ID against interviewer display name (case-insensitive)
+            // Note: Both SpeakerName and SpeakerId contain the display name from VTT
+            bool isInterviewer = string.Equals(segment.SpeakerName, effectiveInterviewerName, StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(segment.SpeakerId, effectiveInterviewerName, StringComparison.OrdinalIgnoreCase);
+            
+            var role = isInterviewer ? SpeakerRole.Interviewer : SpeakerRole.Interviewee;
+            
+            // Create new segment with assigned role
+            var segmentWithRole = segment with { Role = role };
+            segmentsWithRoles.Add(segmentWithRole);
+            
+            _logger.LogTrace("Assigned role {Role} to segment from speaker '{SpeakerName}' (Interviewer: '{Interviewer}')",
+                role, segment.SpeakerName, effectiveInterviewerName);
+        }
+
+        _logger.LogDebug("Role assignment complete for {Count} segments. Interviewer: '{Interviewer}'",
+            segmentsWithRoles.Count, effectiveInterviewerName);
+
+        return segmentsWithRoles;
+    }
+
+    public async Task<MeetingInfo> GetMeetingInfoAsync(string joinWebUrl, CancellationToken cancellationToken)
     {
         try
         {
+            var userId = GetUserId();
+            
             _logger.LogDebug("Searching for meeting by Join URL: {JoinUrl} for user: {UserId}", joinWebUrl, userId);
 
-            // Use provided user ID or fall back to configured default
-            var effectiveUserId = userId ?? _configuration["AzureAd:DefaultUserId"] ?? "aacdff60-4840-45f4-814e-4243bdd0636";
-
-            // Use the correct user context endpoint as discovered in Graph Explorer
-            var meetings = await _graphClient.Users[effectiveUserId].OnlineMeetings
+            // Use delegated token via Graph SDK (better security posture)
+            var meetings = await _graphClient.Users[userId].OnlineMeetings
                 .GetAsync(requestConfiguration =>
                 {
                     requestConfiguration.QueryParameters.Filter = $"joinWebUrl eq '{joinWebUrl}'";
@@ -542,15 +744,15 @@ public class GraphTranscriptService : ITranscriptService
 
             if (meeting == null)
             {
-                _logger.LogWarning("No meeting found with join URL: {JoinUrl} for user: {UserId}", joinWebUrl, effectiveUserId);
+                _logger.LogWarning("No meeting found with join URL: {JoinUrl} for user: {UserId}", joinWebUrl, userId);
                 return null;
             }
 
-            _logger.LogInformation("✅ Successfully found meeting by Join URL for user: {UserId}", effectiveUserId);
+            _logger.LogInformation("✅ Successfully found meeting by Join URL for user: {UserId}", userId);
 
             return new MeetingInfo
             (
-                meeting.Id ?? "", // This is the ID we'll use for transcript retrieval
+                meeting.Id ?? "",
                 meeting.Participants?.Organizer?.Identity?.User?.DisplayName ?? "Unknown Organizer",
                 meeting.StartDateTime ?? DateTimeOffset.UtcNow,
                 meeting.EndDateTime,
@@ -559,7 +761,7 @@ public class GraphTranscriptService : ITranscriptService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to find meeting by Join URL.");
+            _logger.LogError(ex, "Failed to find meeting by Join URL");
             throw;
         }
     }
@@ -575,16 +777,13 @@ public class GraphTranscriptService : ITranscriptService
     public async Task<Subscription> SubscribeToTranscriptChangesAsync(
         string meetingId,
         string webhookUrl,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
             _logger.LogDebug("Creating subscription for meeting {MeetingId}", meetingId);
 
-            // Note: This subscription should trigger webhook notifications that cause
-            // GetNewTranscriptSegmentsAsync to be called, which executes delta queries.
-            // The delta query automatically handles skipToken updates in the deltaLink.
-            // Each delta query response contains an updated @odata.deltaLink with a new skipToken.
             var subscription = new Microsoft.Graph.Models.Subscription
             {
                 ChangeType = "created,updated",
@@ -597,7 +796,7 @@ public class GraphTranscriptService : ITranscriptService
             var createdSubscription = await _graphClient.Subscriptions
                 .PostAsync(subscription, cancellationToken: cancellationToken);
 
-            _logger.LogInformation("Created subscription {SubscriptionId} for meeting {MeetingId}. Webhook notifications will trigger delta queries that automatically refresh the deltaLink with updated skipToken.",
+            _logger.LogInformation("Created subscription {SubscriptionId} for meeting {MeetingId}",
                 createdSubscription?.Id, meetingId);
 
             return new Subscription(
@@ -625,7 +824,7 @@ public class GraphTranscriptService : ITranscriptService
                 ExpirationDateTime = DateTimeOffset.UtcNow.AddHours(1)
             };
 
-            var updatedSubscription = await _graphClient.Subscriptions[subscriptionId]
+            await _graphClient.Subscriptions[subscriptionId]
                 .PatchAsync(subscription, cancellationToken: cancellationToken);
 
             _logger.LogInformation("Renewed subscription {SubscriptionId}", subscriptionId);
@@ -661,8 +860,10 @@ public class GraphTranscriptService : ITranscriptService
         {
             _logger.LogDebug("Downloading transcript content from URL: {Url}", transcriptContentUrl);
 
-            // Get an access token with the required scopes for transcript access
-            var accessToken = await GetAccessTokenWithScopesAsync(cancellationToken);
+            // Prefer delegated token if available (better security), fallback to application token
+            var accessToken = !string.IsNullOrEmpty(_delegatedAccessToken) 
+                ? _delegatedAccessToken 
+                : await GetApplicationTokenAsync(cancellationToken);
 
             if (string.IsNullOrEmpty(accessToken))
             {
@@ -670,9 +871,10 @@ public class GraphTranscriptService : ITranscriptService
                 return string.Empty;
             }
 
-            using var httpClient = new HttpClient();
+            var tokenType = !string.IsNullOrEmpty(_delegatedAccessToken) ? "delegated" : "application";
+            _logger.LogDebug("Using {TokenType} token for transcript content download", tokenType);
 
-            // Add the Bearer token for authentication
+            using var httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
             httpClient.DefaultRequestHeaders.Add("User-Agent", "TeamsMeetingAssistant/1.0");
 
@@ -681,19 +883,9 @@ public class GraphTranscriptService : ITranscriptService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogDebug("Successfully downloaded authenticated transcript content, length: {Length}", content.Length);
+                _logger.LogDebug("Successfully downloaded transcript content ({TokenType} token), length: {Length}", 
+                    tokenType, content.Length);
                 return content;
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                _logger.LogError("Unauthorized access to transcript URL. Token may be invalid or missing required scopes.");
-                _logger.LogInformation("Required scopes: Calendars.Read CallRecordings.Read.All CallTranscripts.Read.All OnlineMeetingArtifact.Read.All OnlineMeetingRecording.Read.All OnlineMeetings.Read OnlineMeetings.ReadWrite OnlineMeetingTranscript.Read.All");
-                return string.Empty;
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-            {
-                _logger.LogError("Forbidden access to transcript URL. User may not have permission to access this transcript.");
-                return string.Empty;
             }
             else
             {
@@ -706,142 +898,6 @@ public class GraphTranscriptService : ITranscriptService
         {
             _logger.LogError(ex, "Error downloading transcript content from URL: {Url}", transcriptContentUrl);
             return string.Empty;
-        }
-    }
-
-    private async Task<string?> GetAccessTokenWithScopesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            // For Application Permissions (client credentials flow), you need to use the ".default" scope
-            // The actual permissions are configured in Azure AD app registration, not in the token request
-            var scope = "https://graph.microsoft.com/.default";
-
-            _logger.LogDebug("Attempting to obtain access token with application permissions scope: {Scope}", scope);
-
-            // Use client credentials flow with the existing client secret
-            // TODO: These should come from configuration/appsettings
-            var tenantId = "TBD"; // TODO: Get from configuration
-            var clientId = "TBD"; // TODO: Get from configuration  
-            var clientSecret = "TBD"; // TODO: Get from configuration
-
-            var tokenEndpoint = $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
-
-            using var httpClient = new HttpClient();
-
-            var tokenRequest = new Dictionary<string, string>
-            {
-                {"client_id", clientId},
-                {"client_secret", clientSecret},
-                {"scope", scope}, // Use .default scope for application permissions
-                {"grant_type", "client_credentials"}
-            };
-
-            var tokenRequestContent = new FormUrlEncodedContent(tokenRequest);
-
-            _logger.LogDebug("Making token request to: {TokenEndpoint}", tokenEndpoint);
-
-            var tokenResponse = await httpClient.PostAsync(tokenEndpoint, tokenRequestContent, cancellationToken);
-
-            if (tokenResponse.IsSuccessStatusCode)
-            {
-                var tokenResponseContent = await tokenResponse.Content.ReadAsStringAsync(cancellationToken);
-
-                // Parse the JSON response to extract the access token
-                using var jsonDoc = System.Text.Json.JsonDocument.Parse(tokenResponseContent);
-
-                if (jsonDoc.RootElement.TryGetProperty("access_token", out var accessTokenElement))
-                {
-                    var accessToken = accessTokenElement.GetString();
-
-                    if (!string.IsNullOrEmpty(accessToken))
-                    {
-                        _logger.LogInformation("Successfully obtained application access token");
-
-                        // Optionally log token expiration
-                        if (jsonDoc.RootElement.TryGetProperty("expires_in", out var expiresInElement))
-                        {
-                            var expiresIn = expiresInElement.GetInt32();
-                            _logger.LogDebug("Token expires in {ExpiresIn} seconds", expiresIn);
-                        }
-
-                        // Log information about required Azure AD app permissions
-                        _logger.LogInformation("Ensure your Azure AD app registration has the following Application Permissions:");
-                        _logger.LogInformation("- Calendars.Read.All");
-                        _logger.LogInformation("- OnlineMeetings.Read.All");
-                        _logger.LogInformation("- OnlineMeetingTranscript.Read.All");
-                        _logger.LogInformation("- CallRecords.Read.All");
-                        _logger.LogInformation("- User.Read.All");
-                        _logger.LogInformation("And that admin consent has been granted for these permissions.");
-
-                        return accessToken;
-                    }
-                }
-
-                _logger.LogError("Access token not found in response");
-                return null;
-            }
-            else
-            {
-                var errorContent = await tokenResponse.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogError("Failed to obtain access token: {StatusCode} - {ReasonPhrase}. Response: {ErrorContent}",
-                    tokenResponse.StatusCode, tokenResponse.ReasonPhrase, errorContent);
-
-                // Try to parse error details from the response
-                try
-                {
-                    using var errorDoc = System.Text.Json.JsonDocument.Parse(errorContent);
-                    if (errorDoc.RootElement.TryGetProperty("error", out var errorElement))
-                    {
-                        var error = errorElement.GetString();
-                        _logger.LogError("OAuth2 Error: {Error}", error);
-
-                        if (errorDoc.RootElement.TryGetProperty("error_description", out var errorDescElement))
-                        {
-                            var errorDescription = errorDescElement.GetString();
-                            _logger.LogError("OAuth2 Error Description: {ErrorDescription}", errorDescription);
-
-                            // Provide specific guidance for common errors
-                            if (errorDescription?.Contains("AADSTS70011") == true)
-                            {
-                                _logger.LogError("Error AADSTS70011 indicates invalid scope. For application permissions, use 'https://graph.microsoft.com/.default'");
-                            }
-                            else if (errorDescription?.Contains("AADSTS65001") == true)
-                            {
-                                _logger.LogError("Error AADSTS65001 indicates the app registration doesn't have the required permissions or admin consent is missing.");
-                            }
-                        }
-                    }
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                    // Ignore JSON parsing errors for error response
-                }
-
-                return null;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error obtaining access token");
-            return null;
-        }
-    }
-
-    // Helper method to get user ID (for testing purposes)
-    public async Task<string> GetMyUserIdAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            // This requires delegated permissions, but useful for finding your user ID
-            var me = await _graphClient.Me.GetAsync(cancellationToken: cancellationToken);
-            _logger.LogInformation("Current user ID: {UserId} ({DisplayName})", me?.Id, me?.DisplayName);
-            return me?.Id ?? "";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to get current user ID");
-            return "";
         }
     }
 
