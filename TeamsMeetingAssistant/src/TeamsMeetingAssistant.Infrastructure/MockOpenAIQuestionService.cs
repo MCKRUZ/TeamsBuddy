@@ -13,7 +13,7 @@ public class MockOpenAIQuestionService : IQuestionGenerationService
         _logger = logger;
     }
 
-    public async Task<List<QuestionSuggestion>> GenerateQuestionsAsync(List<TranscriptSegment> recentTranscript, string meetingContext, CancellationToken cancellationToken)
+    public async Task<List<QuestionSuggestion>> GenerateQuestionsAsync(List<TranscriptSegment> recentTranscript, QuestionGenerationContext context, CancellationToken cancellationToken)
     {
         _logger.LogInformation("MOCK: Generating questions for {SegmentCount} transcript segments", recentTranscript.Count);
 

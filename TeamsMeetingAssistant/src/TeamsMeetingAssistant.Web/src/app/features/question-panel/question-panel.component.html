@@ -1,0 +1,24 @@
+@if (state.questions().length === 0) {
+  <div class="text-400 text-sm mt-2">
+    Questions will appear after 30s of transcription…
+  </div>
+}
+
+@for (q of state.questions(); track q.id) {
+  <div class="question-card">
+    <p-card>
+      <ng-template pTemplate="header">
+        <div class="flex align-items-center gap-2 px-3 pt-3">
+          <p-tag [value]="q.category" [severity]="categorySeverity(q.category)" />
+        </div>
+      </ng-template>
+      <div class="question-text">{{ q.question }}</div>
+      <div class="rationale">{{ q.rationale }}</div>
+      <p-progressBar
+        [value]="confidencePct(q.confidenceScore)"
+        [showValue]="false"
+        styleClass="h-1rem border-round" />
+      <small class="text-400">Confidence: {{ q.confidenceScore | percent:'1.0-0' }}</small>
+    </p-card>
+  </div>
+}

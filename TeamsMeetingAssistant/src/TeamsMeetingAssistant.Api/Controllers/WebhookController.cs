@@ -120,9 +120,16 @@ public class WebhookController : ControllerBase
                 // Generate questions if we have enough segments
                 if (newSegments.Count() >= 3)
                 {
+                    var context = new QuestionGenerationContext(
+                        session.MeetingId,
+                        session.OrganizerEmail,
+                        session.AssistantId,
+                        session.ThreadId,
+                        Array.Empty<KnowledgeChunk>());
+
                     var questions = await _questionService.GenerateQuestionsAsync(
                         newSegments.ToList(),
-                        session.OrganizerEmail,
+                        context,
                         cancellationToken);
 
                     await _signalRService.SendQuestionSuggestionsAsync(meetingId, questions);

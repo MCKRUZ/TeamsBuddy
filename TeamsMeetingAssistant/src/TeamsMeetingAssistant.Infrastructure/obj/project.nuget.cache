@@ -1,12 +1,14 @@
 {
   "version": 2,
-  "dgSpecHash": "BOy2vWmCRUM=",
+  "dgSpecHash": "rpyesIwdFDM=",
   "success": true,
-  "projectFilePath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
+  "projectFilePath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\kruz7\\.nuget\\packages\\azure.ai.openai\\2.0.0\\azure.ai.openai.2.0.0.nupkg.sha512",
+    "C:\\Users\\kruz7\\.nuget\\packages\\azure.ai.openai.assistants\\1.0.0-beta.4\\azure.ai.openai.assistants.1.0.0-beta.4.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\azure.core\\1.49.0\\azure.core.1.49.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\azure.identity\\1.17.0\\azure.identity.1.17.0.nupkg.sha512",
+    "C:\\Users\\kruz7\\.nuget\\packages\\azure.search.documents\\11.7.0\\azure.search.documents.11.7.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.aspnetcore.connections.abstractions\\9.0.10\\microsoft.aspnetcore.connections.abstractions.9.0.10.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.aspnetcore.http.connections.client\\9.0.10\\microsoft.aspnetcore.http.connections.client.9.0.10.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.aspnetcore.http.connections.common\\9.0.10\\microsoft.aspnetcore.http.connections.common.9.0.10.nupkg.sha512",
@@ -17,6 +19,7 @@
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\9.0.10\\microsoft.bcl.asyncinterfaces.9.0.10.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.bcl.memory\\9.0.0\\microsoft.bcl.memory.9.0.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.bcl.timeprovider\\9.0.10\\microsoft.bcl.timeprovider.9.0.10.nupkg.sha512",
+    "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\9.0.10\\microsoft.extensions.configuration.abstractions.9.0.10.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.extensions.dependencyinjection\\9.0.10\\microsoft.extensions.dependencyinjection.9.0.10.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\9.0.10\\microsoft.extensions.dependencyinjection.abstractions.9.0.10.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.extensions.features\\9.0.10\\microsoft.extensions.features.9.0.10.nupkg.sha512",
@@ -57,18 +60,5 @@
     "C:\\Users\\kruz7\\.nuget\\packages\\system.text.json\\9.0.10\\system.text.json.9.0.10.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\system.threading.channels\\9.0.10\\system.threading.channels.9.0.10.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1603",
-      "level": "Warning",
-      "message": "TeamsMeetingAssistant.Infrastructure depends on Azure.AI.OpenAI (>= 1.0.0) but Azure.AI.OpenAI 1.0.0 was not found. Azure.AI.OpenAI 2.0.0 was resolved instead.",
-      "projectPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
-      "warningLevel": 1,
-      "filePath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
-      "libraryId": "Azure.AI.OpenAI",
-      "targetGraphs": [
-        "net8.0"
-      ]
-    }
-  ]
+  "logs": []
 }

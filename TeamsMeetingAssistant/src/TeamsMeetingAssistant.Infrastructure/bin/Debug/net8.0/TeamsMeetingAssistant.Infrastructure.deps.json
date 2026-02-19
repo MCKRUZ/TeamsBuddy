@@ -9,8 +9,11 @@
       "TeamsMeetingAssistant.Infrastructure/1.0.0": {
         "dependencies": {
           "Azure.AI.OpenAI": "2.0.0",
+          "Azure.AI.OpenAI.Assistants": "1.0.0-beta.4",
           "Azure.Identity": "1.17.0",
+          "Azure.Search.Documents": "11.7.0",
           "Microsoft.AspNetCore.SignalR.Client": "9.0.10",
+          "Microsoft.Extensions.Configuration.Abstractions": "9.0.10",
           "Microsoft.Extensions.Logging.Abstractions": "9.0.10",
           "Microsoft.Graph": "5.95.0",
           "Polly": "8.6.4",
@@ -29,6 +32,19 @@
           "lib/netstandard2.0/Azure.AI.OpenAI.dll": {
             "assemblyVersion": "2.0.0.0",
             "fileVersion": "2.0.24.48003"
+          }
+        }
+      },
+      "Azure.AI.OpenAI.Assistants/1.0.0-beta.4": {
+        "dependencies": {
+          "Azure.Core": "1.49.0",
+          "System.ClientModel": "1.7.0",
+          "System.Text.Json": "9.0.10"
+        },
+        "runtime": {
+          "lib/netstandard2.0/Azure.AI.OpenAI.Assistants.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.24.23001"
           }
         }
       },
@@ -55,6 +71,17 @@
           "lib/net8.0/Azure.Identity.dll": {
             "assemblyVersion": "1.17.0.0",
             "fileVersion": "1.1700.25.50703"
+          }
+        }
+      },
+      "Azure.Search.Documents/11.7.0": {
+        "dependencies": {
+          "Azure.Core": "1.49.0"
+        },
+        "runtime": {
+          "lib/net8.0/Azure.Search.Documents.dll": {
+            "assemblyVersion": "11.7.0.0",
+            "fileVersion": "11.700.25.50904"
           }
         }
       },
@@ -169,6 +196,17 @@
         "runtime": {
           "lib/net8.0/Microsoft.Bcl.TimeProvider.dll": {
             "assemblyVersion": "9.0.0.10",
+            "fileVersion": "9.0.1025.47515"
+          }
+        }
+      },
+      "Microsoft.Extensions.Configuration.Abstractions/9.0.10": {
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "9.0.10"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.Configuration.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
             "fileVersion": "9.0.1025.47515"
           }
         }
@@ -627,6 +665,13 @@
       "path": "azure.ai.openai/2.0.0",
       "hashPath": "azure.ai.openai.2.0.0.nupkg.sha512"
     },
+    "Azure.AI.OpenAI.Assistants/1.0.0-beta.4": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-AzHtUzNtUNS0TqMr3RNy8E2v9H/nfah4NyisMVzbeFJTieTDLOW4IVArTFF0xR/UMmfWvW5N/56zYPXR4hSelg==",
+      "path": "azure.ai.openai.assistants/1.0.0-beta.4",
+      "hashPath": "azure.ai.openai.assistants.1.0.0-beta.4.nupkg.sha512"
+    },
     "Azure.Core/1.49.0": {
       "type": "package",
       "serviceable": true,
@@ -640,6 +685,13 @@
       "sha512": "sha512-QZiMa1O5lTniWTSDPyPVdBKOS0/M5DWXTfQ2xLOot96yp8Q5A69iScGtzCIxfbg/4bmp/TynibZ2VK1v3qsSNA==",
       "path": "azure.identity/1.17.0",
       "hashPath": "azure.identity.1.17.0.nupkg.sha512"
+    },
+    "Azure.Search.Documents/11.7.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-48yBLnsf8SSgowe/OQDCNg9+G9WjzRmLX6Bghjlshxu+5Mhh4maTXvSWKi4o568ZqV6GoOYhiKPbCm/QYoufwA==",
+      "path": "azure.search.documents/11.7.0",
+      "hashPath": "azure.search.documents.11.7.0.nupkg.sha512"
     },
     "Microsoft.AspNetCore.Connections.Abstractions/9.0.10": {
       "type": "package",
@@ -710,6 +762,13 @@
       "sha512": "sha512-RkEJPiW7iekV2mDL1CkhGE/W96kafFWEvu95+YHwELjCqitlmnbdwjRlPHV9bxgOaB5LQZ7u5LWazPKDrLpcBA==",
       "path": "microsoft.bcl.timeprovider/9.0.10",
       "hashPath": "microsoft.bcl.timeprovider.9.0.10.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Configuration.Abstractions/9.0.10": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ad3JxmFj0uxuFa1CT6oxTCC1lQ0xeRuOvzBRFT/I/ofIXVOnNsH/v2GZkAJWhlpZqKUvSexQZzp3EEAB2CdtJg==",
+      "path": "microsoft.extensions.configuration.abstractions/9.0.10",
+      "hashPath": "microsoft.extensions.configuration.abstractions.9.0.10.nupkg.sha512"
     },
     "Microsoft.Extensions.DependencyInjection/9.0.10": {
       "type": "package",

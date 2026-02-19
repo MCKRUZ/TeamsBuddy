@@ -13,3 +13,19 @@ C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure
 C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\refint\TeamsMeetingAssistant.Infrastructure.dll
 C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.pdb
 C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\ref\TeamsMeetingAssistant.Infrastructure.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.deps.json
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.pdb
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Core.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\bin\Debug\net8.0\TeamsMeetingAssistant.Core.pdb
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.csproj.AssemblyReference.cache
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.AssemblyInfoInputs.cache
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.AssemblyInfo.cs
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.sourcelink.json
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMee.C72E57B1.Up2Date
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\refint\TeamsMeetingAssistant.Infrastructure.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\TeamsMeetingAssistant.Infrastructure.pdb
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Infrastructure\obj\Debug\net8.0\ref\TeamsMeetingAssistant.Infrastructure.dll

@@ -5,9 +5,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0" />
+    <PackageReference Include="Azure.AI.OpenAI.Assistants" Version="1.0.0-beta.4" />
     <PackageReference Include="Azure.Identity" Version="1.17.0" />
+    <PackageReference Include="Azure.Search.Documents" Version="11.7.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.10" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
     <PackageReference Include="Microsoft.Graph" Version="5.95.0" />
     <PackageReference Include="Polly" Version="8.6.4" />

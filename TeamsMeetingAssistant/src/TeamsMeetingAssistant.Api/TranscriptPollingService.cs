@@ -51,7 +51,6 @@ public class TranscriptPollingService : BackgroundService
 
         _logger.LogDebug("Polling {Count} active meeting sessions", activeSessions.Count());
 
-        // Process sessions in parallel with max concurrency
         var options = new ParallelOptions
         {
             MaxDegreeOfParallelism = 5,
@@ -73,10 +72,10 @@ public class TranscriptPollingService : BackgroundService
         var transcriptService = scope.ServiceProvider.GetRequiredService<ITranscriptService>();
         var signalRService = scope.ServiceProvider.GetRequiredService<ISignalRService>();
         var questionService = scope.ServiceProvider.GetRequiredService<IQuestionGenerationService>();
+        var orgKnowledgeService = scope.ServiceProvider.GetRequiredService<IOrgKnowledgeService>();
 
         try
         {
-            // Get new transcript segments
             var newSegments = await transcriptService.GetNewTranscriptSegmentsAsync(
                 session.MeetingId,
                 session.LastProcessedTime,
@@ -92,28 +91,36 @@ public class TranscriptPollingService : BackgroundService
                 newSegments.Count(),
                 session.MeetingId);
 
-            // Stream segments to SignalR
             foreach (var segment in newSegments)
             {
                 await signalRService.SendTranscriptUpdateAsync(session.MeetingId, segment);
             }
 
-            // Generate question suggestions if enough time has passed
             var timeSinceLastQuestion = DateTimeOffset.UtcNow - session.LastProcessedTime;
             var questionThreshold = TimeSpan.FromSeconds(
                 _configuration.GetValue<int>("TranscriptProcessing:QuestionGenerationThresholdSeconds", 30));
 
             if (timeSinceLastQuestion >= questionThreshold && newSegments.Count() >= 3)
             {
+                var topK = _configuration.GetValue<int>("AzureAISearch:TopK", 5);
+                var query = string.Join(" ", newSegments.TakeLast(3).Select(s => s.Content));
+                var orgChunks = await orgKnowledgeService.SearchAsync(query, topK, cancellationToken);
+
+                var context = new QuestionGenerationContext(
+                    session.MeetingId,
+                    session.OrganizerEmail,
+                    session.AssistantId,
+                    session.ThreadId,
+                    orgChunks);
+
                 var questions = await questionService.GenerateQuestionsAsync(
                     newSegments.ToList(),
-                    session.OrganizerEmail, // Can be enhanced with meeting context
+                    context,
                     cancellationToken);
 
                 await signalRService.SendQuestionSuggestionsAsync(session.MeetingId, questions);
             }
 
-            // Update session
             var updatedSession = session with
             {
                 LastProcessedTime = newSegments.Max(s => s.Timestamp)
@@ -124,7 +131,6 @@ public class TranscriptPollingService : BackgroundService
         {
             _logger.LogError(ex, "Error processing meeting {MeetingId}", session.MeetingId);
 
-            // Update session status to error
             var errorSession = session with { Status = MeetingStatus.Error };
             await _sessionStore.AddOrUpdateAsync(errorSession);
         }

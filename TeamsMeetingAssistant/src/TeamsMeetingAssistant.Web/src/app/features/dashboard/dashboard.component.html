@@ -1,0 +1,19 @@
+<div class="grid p-3" style="min-height: calc(100vh - 58px);">
+  <!-- Left column: controls + questions -->
+  <div class="col-12 md:col-4 lg:col-3 flex flex-column gap-3">
+    <p-panel header="Meeting">
+      <app-meeting-controls />
+    </p-panel>
+
+    <p-panel header="Questions">
+      <app-question-panel />
+    </p-panel>
+  </div>
+
+  <!-- Right column: live transcript -->
+  <div class="col-12 md:col-8 lg:col-9">
+    <p-panel header="Live Transcript" styleClass="h-full">
+      <app-transcript-panel />
+    </p-panel>
+  </div>
+</div>

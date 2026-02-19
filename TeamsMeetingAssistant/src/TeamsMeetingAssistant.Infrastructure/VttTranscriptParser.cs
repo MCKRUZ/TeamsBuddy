@@ -50,7 +50,8 @@ public class VttTranscriptParser
                 var contentStart = trimmedLine.IndexOf('>') + 1;
                 if (contentStart > 0 && contentStart < trimmedLine.Length)
                 {
-                    var speakerWithContent = trimmedLine[3..contentStart].Trim();
+                    // contentStart points one past '>'; exclude the '>' itself
+                    var speakerWithContent = trimmedLine[3..(contentStart - 1)].Trim();
                     var content = trimmedLine[contentStart..].Trim();
 
                     // Extract speaker name and ID

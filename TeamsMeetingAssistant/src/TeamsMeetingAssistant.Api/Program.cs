@@ -14,7 +14,9 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(builder.Configuration["AllowedOrigins"] ?? "http://localhost:5002")
+        var origins = (builder.Configuration["AllowedOrigins"] ?? "http://localhost:5002")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        policy.WithOrigins(origins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -35,9 +37,39 @@ else
 // Register application services
 builder.Services.AddSingleton<IMeetingSessionStore, InMemoryMeetingSessionStore>();
 
-// Use mock services for demonstration - replace with real services in production
-builder.Services.AddScoped<ITranscriptService, MockGraphTranscriptService>();
-builder.Services.AddScoped<IQuestionGenerationService, MockOpenAIQuestionService>();
+// Register infrastructure dependencies
+builder.Services.AddSingleton<TeamsMeetingAssistant.Infrastructure.VttTranscriptParser>();
+
+// Real Graph API service - requires AzureAd config in appsettings
+builder.Services.AddScoped<ITranscriptService, TeamsMeetingAssistant.Infrastructure.GraphTranscriptService>();
+
+// Option 2: Azure OpenAI Assistants (per-meeting document knowledge)
+if (builder.Configuration.GetValue<bool>("AzureOpenAI:AssistantsEnabled"))
+{
+    builder.Services.AddScoped<IMeetingDocumentService, AssistantsDocumentService>();
+    builder.Services.AddScoped<IQuestionGenerationService, AzureOpenAIAssistantsQuestionService>();
+}
+else if (!string.IsNullOrEmpty(builder.Configuration["AzureOpenAI:Endpoint"]))
+{
+    builder.Services.AddScoped<IMeetingDocumentService, NullMeetingDocumentService>();
+    builder.Services.AddScoped<IQuestionGenerationService, AzureOpenAIQuestionService>();
+}
+else
+{
+    builder.Services.AddScoped<IMeetingDocumentService, NullMeetingDocumentService>();
+    builder.Services.AddScoped<IQuestionGenerationService, MockOpenAIQuestionService>();
+}
+
+// Option 3: Azure AI Search (org-wide knowledge base)
+if (!string.IsNullOrEmpty(builder.Configuration["AzureAISearch:Endpoint"]))
+{
+    builder.Services.AddScoped<IOrgKnowledgeService, AzureSearchOrgKnowledgeService>();
+}
+else
+{
+    builder.Services.AddScoped<IOrgKnowledgeService, NullOrgKnowledgeService>();
+}
+
 builder.Services.AddScoped<ISignalRService, TeamsMeetingAssistant.Api.SignalRHubService>();
 
 // Add background services

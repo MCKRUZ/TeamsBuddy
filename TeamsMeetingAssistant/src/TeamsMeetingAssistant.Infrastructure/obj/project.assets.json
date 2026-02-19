@@ -19,6 +19,24 @@
           }
         }
       },
+      "Azure.AI.OpenAI.Assistants/1.0.0-beta.4": {
+        "type": "package",
+        "dependencies": {
+          "Azure.Core": "1.39.0",
+          "System.ClientModel": "1.0.0",
+          "System.Text.Json": "4.7.2"
+        },
+        "compile": {
+          "lib/netstandard2.0/Azure.AI.OpenAI.Assistants.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/Azure.AI.OpenAI.Assistants.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Azure.Core/1.49.0": {
         "type": "package",
         "dependencies": {
@@ -51,6 +69,22 @@
         },
         "runtime": {
           "lib/net8.0/Azure.Identity.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Azure.Search.Documents/11.7.0": {
+        "type": "package",
+        "dependencies": {
+          "Azure.Core": "1.49.0"
+        },
+        "compile": {
+          "lib/net8.0/Azure.Search.Documents.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/Azure.Search.Documents.dll": {
             "related": ".xml"
           }
         }
@@ -222,6 +256,25 @@
         },
         "runtime": {
           "lib/net8.0/Microsoft.Bcl.TimeProvider.dll": {
+            "related": ".xml"
+          }
+        },
+        "build": {
+          "buildTransitive/net8.0/_._": {}
+        }
+      },
+      "Microsoft.Extensions.Configuration.Abstractions/9.0.10": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "9.0.10"
+        },
+        "compile": {
+          "lib/net8.0/Microsoft.Extensions.Configuration.Abstractions.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.Configuration.Abstractions.dll": {
             "related": ".xml"
           }
         },
@@ -913,6 +966,22 @@
         "lib/netstandard2.0/Azure.AI.OpenAI.xml"
       ]
     },
+    "Azure.AI.OpenAI.Assistants/1.0.0-beta.4": {
+      "sha512": "AzHtUzNtUNS0TqMr3RNy8E2v9H/nfah4NyisMVzbeFJTieTDLOW4IVArTFF0xR/UMmfWvW5N/56zYPXR4hSelg==",
+      "type": "package",
+      "path": "azure.ai.openai.assistants/1.0.0-beta.4",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "CHANGELOG.md",
+        "README.md",
+        "azure.ai.openai.assistants.1.0.0-beta.4.nupkg.sha512",
+        "azure.ai.openai.assistants.nuspec",
+        "azureicon.png",
+        "lib/netstandard2.0/Azure.AI.OpenAI.Assistants.dll",
+        "lib/netstandard2.0/Azure.AI.OpenAI.Assistants.xml"
+      ]
+    },
     "Azure.Core/1.49.0": {
       "sha512": "wmY5VEEVTBJN+8KVB6qSVZYDCMpHs1UXooOijx/NH7OsMtK92NlxhPBpPyh4cR+07R/zyDGvA5+Fss4TpwlO+g==",
       "type": "package",
@@ -951,6 +1020,24 @@
         "lib/net8.0/Azure.Identity.xml",
         "lib/netstandard2.0/Azure.Identity.dll",
         "lib/netstandard2.0/Azure.Identity.xml"
+      ]
+    },
+    "Azure.Search.Documents/11.7.0": {
+      "sha512": "48yBLnsf8SSgowe/OQDCNg9+G9WjzRmLX6Bghjlshxu+5Mhh4maTXvSWKi4o568ZqV6GoOYhiKPbCm/QYoufwA==",
+      "type": "package",
+      "path": "azure.search.documents/11.7.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "CHANGELOG.md",
+        "README.md",
+        "azure.search.documents.11.7.0.nupkg.sha512",
+        "azure.search.documents.nuspec",
+        "azureicon.png",
+        "lib/net8.0/Azure.Search.Documents.dll",
+        "lib/net8.0/Azure.Search.Documents.xml",
+        "lib/netstandard2.0/Azure.Search.Documents.dll",
+        "lib/netstandard2.0/Azure.Search.Documents.xml"
       ]
     },
     "Microsoft.AspNetCore.Connections.Abstractions/9.0.10": {
@@ -1171,6 +1258,34 @@
         "lib/netstandard2.0/Microsoft.Bcl.TimeProvider.xml",
         "microsoft.bcl.timeprovider.9.0.10.nupkg.sha512",
         "microsoft.bcl.timeprovider.nuspec",
+        "useSharedDesignerContext.txt"
+      ]
+    },
+    "Microsoft.Extensions.Configuration.Abstractions/9.0.10": {
+      "sha512": "ad3JxmFj0uxuFa1CT6oxTCC1lQ0xeRuOvzBRFT/I/ofIXVOnNsH/v2GZkAJWhlpZqKUvSexQZzp3EEAB2CdtJg==",
+      "type": "package",
+      "path": "microsoft.extensions.configuration.abstractions/9.0.10",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Icon.png",
+        "LICENSE.TXT",
+        "PACKAGE.md",
+        "THIRD-PARTY-NOTICES.TXT",
+        "buildTransitive/net461/Microsoft.Extensions.Configuration.Abstractions.targets",
+        "buildTransitive/net462/_._",
+        "buildTransitive/net8.0/_._",
+        "buildTransitive/netcoreapp2.0/Microsoft.Extensions.Configuration.Abstractions.targets",
+        "lib/net462/Microsoft.Extensions.Configuration.Abstractions.dll",
+        "lib/net462/Microsoft.Extensions.Configuration.Abstractions.xml",
+        "lib/net8.0/Microsoft.Extensions.Configuration.Abstractions.dll",
+        "lib/net8.0/Microsoft.Extensions.Configuration.Abstractions.xml",
+        "lib/net9.0/Microsoft.Extensions.Configuration.Abstractions.dll",
+        "lib/net9.0/Microsoft.Extensions.Configuration.Abstractions.xml",
+        "lib/netstandard2.0/Microsoft.Extensions.Configuration.Abstractions.dll",
+        "lib/netstandard2.0/Microsoft.Extensions.Configuration.Abstractions.xml",
+        "microsoft.extensions.configuration.abstractions.9.0.10.nupkg.sha512",
+        "microsoft.extensions.configuration.abstractions.nuspec",
         "useSharedDesignerContext.txt"
       ]
     },
@@ -2259,9 +2374,12 @@
   },
   "projectFileDependencyGroups": {
     "net8.0": [
-      "Azure.AI.OpenAI >= 1.0.0",
+      "Azure.AI.OpenAI >= 2.0.0",
+      "Azure.AI.OpenAI.Assistants >= 1.0.0-beta.4",
       "Azure.Identity >= 1.17.0",
+      "Azure.Search.Documents >= 11.7.0",
       "Microsoft.AspNetCore.SignalR.Client >= 9.0.10",
+      "Microsoft.Extensions.Configuration.Abstractions >= 9.0.10",
       "Microsoft.Extensions.Logging.Abstractions >= 9.0.10",
       "Microsoft.Graph >= 5.95.0",
       "Polly >= 8.6.4",
@@ -2275,11 +2393,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
+      "projectUniqueName": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
       "projectName": "TeamsMeetingAssistant.Infrastructure",
-      "projectPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
+      "projectPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
       "packagesPath": "C:\\Users\\kruz7\\.nuget\\packages\\",
-      "outputPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\obj\\",
+      "outputPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -2301,8 +2419,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj": {
-              "projectPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj"
+            "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj": {
+              "projectPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj"
             }
           }
         }
@@ -2317,7 +2435,7 @@
         "auditLevel": "low",
         "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "9.0.300"
+      "SdkAnalysisLevel": "10.0.100"
     },
     "frameworks": {
       "net8.0": {
@@ -2325,13 +2443,25 @@
         "dependencies": {
           "Azure.AI.OpenAI": {
             "target": "Package",
-            "version": "[1.0.0, )"
+            "version": "[2.0.0, )"
+          },
+          "Azure.AI.OpenAI.Assistants": {
+            "target": "Package",
+            "version": "[1.0.0-beta.4, )"
           },
           "Azure.Identity": {
             "target": "Package",
             "version": "[1.17.0, )"
           },
+          "Azure.Search.Documents": {
+            "target": "Package",
+            "version": "[11.7.0, )"
+          },
           "Microsoft.AspNetCore.SignalR.Client": {
+            "target": "Package",
+            "version": "[9.0.10, )"
+          },
+          "Microsoft.Extensions.Configuration.Abstractions": {
             "target": "Package",
             "version": "[9.0.10, )"
           },
@@ -2364,20 +2494,8 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.306/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
       }
     }
-  },
-  "logs": [
-    {
-      "code": "NU1603",
-      "level": "Warning",
-      "warningLevel": 1,
-      "message": "TeamsMeetingAssistant.Infrastructure depends on Azure.AI.OpenAI (>= 1.0.0) but Azure.AI.OpenAI 1.0.0 was not found. Azure.AI.OpenAI 2.0.0 was resolved instead.",
-      "libraryId": "Azure.AI.OpenAI",
-      "targetGraphs": [
-        "net8.0"
-      ]
-    }
-  ]
+  }
 }

@@ -10,34 +10,42 @@ public class MeetingController : ControllerBase
 {
     private readonly IMeetingSessionStore _sessionStore;
     private readonly ITranscriptService _transcriptService;
+    private readonly IMeetingDocumentService _documentService;
     private readonly ILogger<MeetingController> _logger;
     private readonly SubscriptionRenewalService _renewalService;
 
     public MeetingController(
         IMeetingSessionStore sessionStore,
         ITranscriptService transcriptService,
+        IMeetingDocumentService documentService,
         ILogger<MeetingController> logger,
         IHostedService renewalService)
     {
         _sessionStore = sessionStore;
         _transcriptService = transcriptService;
+        _documentService = documentService;
         _logger = logger;
         _renewalService = (SubscriptionRenewalService)renewalService;
     }
 
+    /// <summary>
+    /// Start monitoring a meeting. Accepts an optional set of documents to load into the
+    /// Assistants vector store when AssistantsEnabled=true.
+    /// </summary>
     [HttpPost("start")]
+    [Consumes("multipart/form-data", "application/json")]
     public async Task<IActionResult> StartMonitoring(
-        [FromBody] StartMonitoringRequest request,
-        CancellationToken cancellationToken)
+        [FromForm] string meetingId,
+        [FromForm] bool useWebhooks = false,
+        [FromForm] bool useAssistants = false,
+        [FromForm] bool indexInOrgKnowledge = false,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Starting monitoring for meeting {MeetingId}", request.MeetingId);
+            _logger.LogInformation("Starting monitoring for meeting {MeetingId}", meetingId);
 
-            // Validate meeting and get info
-            var meetingInfo = await _transcriptService.GetMeetingInfoAsync(
-                request.MeetingId,
-                cancellationToken);
+            var meetingInfo = await _transcriptService.GetMeetingInfoAsync(meetingId, cancellationToken);
 
             if (!meetingInfo.IsTranscriptionEnabled)
             {
@@ -47,7 +55,6 @@ public class MeetingController : ControllerBase
                 });
             }
 
-            // Create session
             var session = new MeetingSession(
                 meetingInfo.MeetingId,
                 meetingInfo.OrganizerEmail,
@@ -56,33 +63,42 @@ public class MeetingController : ControllerBase
                 true,
                 null,
                 DateTimeOffset.UtcNow,
-                MeetingStatus.Active
-            );
+                MeetingStatus.Active);
+
+            // Initialise Assistants and upload any provided documents
+            if (useAssistants)
+            {
+                var documents = ReadFormFiles(Request.Form.Files, indexInOrgKnowledge);
+                session = await _documentService.InitialiseAssistantAsync(session, documents, cancellationToken);
+            }
 
             await _sessionStore.AddOrUpdateAsync(session);
 
-            // Subscribe to webhooks (optional - can rely on polling only)
-            if (request.UseWebhooks)
+            if (useWebhooks)
             {
                 var webhookUrl = $"{Request.Scheme}://{Request.Host}/api/webhook/transcript";
                 var subscription = await _transcriptService.SubscribeToTranscriptChangesAsync(
-                    request.MeetingId,
-                    webhookUrl,
-                    cancellationToken);
+                    meetingId, webhookUrl, cancellationToken);
 
                 _renewalService.TrackSubscription(
-                    request.MeetingId,
+                    meetingId,
                     subscription.Id,
                     subscription.ExpirationDateTime ?? DateTimeOffset.UtcNow.AddHours(1));
             }
 
-            _logger.LogInformation("Started monitoring meeting {MeetingId}", request.MeetingId);
+            _logger.LogInformation("Started monitoring meeting {MeetingId} (assistants={UseAssistants})", meetingId, useAssistants);
 
-            return Ok(new { meetingId = request.MeetingId, status = "monitoring" });
+            return Ok(new
+            {
+                meetingId,
+                status = "monitoring",
+                assistantId = session.AssistantId,
+                threadId = session.ThreadId
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to start monitoring meeting {MeetingId}", request.MeetingId);
+            _logger.LogError(ex, "Failed to start monitoring meeting {MeetingId}", meetingId);
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -99,11 +115,11 @@ public class MeetingController : ControllerBase
             var session = await _sessionStore.GetAsync(request.MeetingId);
 
             if (session == null)
-            {
                 return NotFound(new { error = "Meeting session not found" });
-            }
 
-            // Update session status
+            // Clean up Assistants resources before marking complete
+            await _documentService.CleanupAsync(session, cancellationToken);
+
             var completedSession = session with
             {
                 Status = MeetingStatus.Completed,
@@ -147,9 +163,7 @@ public class MeetingController : ControllerBase
             var session = await _sessionStore.GetAsync(meetingId);
 
             if (session == null)
-            {
                 return NotFound(new { error = "Meeting session not found" });
-            }
 
             return Ok(session);
         }
@@ -178,7 +192,21 @@ public class MeetingController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    private static IReadOnlyList<DocumentUpload> ReadFormFiles(IFormFileCollection files, bool indexInOrgKnowledge)
+    {
+        if (files.Count == 0)
+            return Array.Empty<DocumentUpload>();
+
+        var uploads = new List<DocumentUpload>(files.Count);
+        foreach (var file in files)
+        {
+            using var ms = new MemoryStream();
+            file.CopyTo(ms);
+            uploads.Add(new DocumentUpload(file.FileName, file.ContentType, ms.ToArray(), indexInOrgKnowledge));
+        }
+        return uploads;
+    }
 }
 
-public record StartMonitoringRequest(string MeetingId, bool UseWebhooks = false);
 public record StopMonitoringRequest(string MeetingId);

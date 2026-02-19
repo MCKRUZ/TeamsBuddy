@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TeamsMeetingAssistant.Infrastructure")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3b37f26a2908ee9f9b7cb3a38f4ef6e95e332225")]
 [assembly: System.Reflection.AssemblyProductAttribute("TeamsMeetingAssistant.Infrastructure")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TeamsMeetingAssistant.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

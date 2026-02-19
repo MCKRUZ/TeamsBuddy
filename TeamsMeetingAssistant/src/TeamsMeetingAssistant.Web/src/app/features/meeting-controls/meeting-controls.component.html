@@ -1,0 +1,40 @@
+<div class="flex flex-column gap-2">
+  <label for="meetingId" class="font-semibold text-sm">Meeting ID</label>
+  <input
+    pInputText
+    id="meetingId"
+    [(ngModel)]="meetingId"
+    placeholder="e.g. MSTeams meeting ID"
+    [disabled]="state.isMonitoring()"
+    class="w-full" />
+
+  <div class="flex gap-2">
+    <p-button
+      label="Start"
+      icon="pi pi-play"
+      (onClick)="start()"
+      [loading]="loading()"
+      [disabled]="state.isMonitoring()"
+      severity="success"
+      class="flex-1" />
+    <p-button
+      label="Stop"
+      icon="pi pi-stop"
+      (onClick)="stop()"
+      [loading]="loading()"
+      [disabled]="!state.isMonitoring()"
+      severity="danger"
+      class="flex-1" />
+  </div>
+
+  @if (state.session()) {
+    <div class="flex align-items-center gap-2 mt-1">
+      <span class="text-sm text-600">Status:</span>
+      <p-tag [value]="state.session()!.status" [severity]="statusSeverity" />
+    </div>
+  }
+
+  @if (errorMessage()) {
+    <small class="text-red-500">{{ errorMessage() }}</small>
+  }
+</div>

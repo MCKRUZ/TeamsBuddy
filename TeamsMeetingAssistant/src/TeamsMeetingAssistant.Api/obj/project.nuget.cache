@@ -1,12 +1,14 @@
 {
   "version": 2,
-  "dgSpecHash": "6rJArkGdsbI=",
+  "dgSpecHash": "VtnAdLjguAU=",
   "success": true,
-  "projectFilePath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Api\\TeamsMeetingAssistant.Api.csproj",
+  "projectFilePath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Api\\TeamsMeetingAssistant.Api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\kruz7\\.nuget\\packages\\azure.ai.openai\\2.0.0\\azure.ai.openai.2.0.0.nupkg.sha512",
+    "C:\\Users\\kruz7\\.nuget\\packages\\azure.ai.openai.assistants\\1.0.0-beta.4\\azure.ai.openai.assistants.1.0.0-beta.4.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\azure.core\\1.49.0\\azure.core.1.49.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\azure.identity\\1.17.0\\azure.identity.1.17.0.nupkg.sha512",
+    "C:\\Users\\kruz7\\.nuget\\packages\\azure.search.documents\\11.7.0\\azure.search.documents.11.7.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.aspnetcore.authentication.abstractions\\2.3.0\\microsoft.aspnetcore.authentication.abstractions.2.3.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.aspnetcore.authorization\\2.3.0\\microsoft.aspnetcore.authorization.2.3.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\microsoft.aspnetcore.authorization.policy\\2.3.0\\microsoft.aspnetcore.authorization.policy.2.3.0.nupkg.sha512",
@@ -111,20 +113,8 @@
     "C:\\Users\\kruz7\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\system.security.cryptography.protecteddata\\4.5.0\\system.security.cryptography.protecteddata.4.5.0.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\system.text.encodings.web\\8.0.0\\system.text.encodings.web.8.0.0.nupkg.sha512",
+    "C:\\Users\\kruz7\\.nuget\\packages\\system.text.json\\4.7.2\\system.text.json.4.7.2.nupkg.sha512",
     "C:\\Users\\kruz7\\.nuget\\packages\\system.threading.channels\\9.0.10\\system.threading.channels.9.0.10.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1603",
-      "level": "Warning",
-      "message": "TeamsMeetingAssistant.Infrastructure depends on Azure.AI.OpenAI (>= 1.0.0) but Azure.AI.OpenAI 1.0.0 was not found. Azure.AI.OpenAI 2.0.0 was resolved instead.",
-      "projectPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Api\\TeamsMeetingAssistant.Api.csproj",
-      "warningLevel": 1,
-      "filePath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Api\\TeamsMeetingAssistant.Api.csproj",
-      "libraryId": "Azure.AI.OpenAI",
-      "targetGraphs": [
-        "net9.0"
-      ]
-    }
-  ]
+  "logs": []
 }

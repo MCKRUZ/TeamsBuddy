@@ -1,0 +1,19 @@
+<div class="transcript-scroll">
+  @if (state.transcript().length === 0) {
+    <div class="flex align-items-center justify-content-center h-full text-400 text-sm">
+      <span>Transcript will appear here when monitoring starts…</span>
+    </div>
+  }
+
+  @for (segment of state.transcript(); track segment.id) {
+    <div class="transcript-entry">
+      <div class="flex justify-content-between">
+        <span class="speaker">{{ segment.speakerName }}</span>
+        <span class="ts">{{ segment.timestamp | date:'HH:mm:ss' }}</span>
+      </div>
+      <div class="content">{{ segment.content }}</div>
+    </div>
+  }
+
+  <div #scrollEnd></div>
+</div>

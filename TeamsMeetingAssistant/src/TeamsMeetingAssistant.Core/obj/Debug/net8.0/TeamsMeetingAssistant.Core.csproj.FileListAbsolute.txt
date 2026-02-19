@@ -9,3 +9,15 @@ C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug
 C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\refint\TeamsMeetingAssistant.Core.dll
 C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.pdb
 C:\temp\Prototype\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\ref\TeamsMeetingAssistant.Core.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\bin\Debug\net8.0\TeamsMeetingAssistant.Core.deps.json
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\bin\Debug\net8.0\TeamsMeetingAssistant.Core.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\bin\Debug\net8.0\TeamsMeetingAssistant.Core.pdb
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.AssemblyInfoInputs.cache
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.AssemblyInfo.cs
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.csproj.CoreCompileInputs.cache
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.sourcelink.json
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\refint\TeamsMeetingAssistant.Core.dll
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\TeamsMeetingAssistant.Core.pdb
+C:\Users\kruz7\OneDrive\Documents\Code Repos\MCKRUZ\TeamsBuddy\TeamsMeetingAssistant\src\TeamsMeetingAssistant.Core\obj\Debug\net8.0\ref\TeamsMeetingAssistant.Core.dll

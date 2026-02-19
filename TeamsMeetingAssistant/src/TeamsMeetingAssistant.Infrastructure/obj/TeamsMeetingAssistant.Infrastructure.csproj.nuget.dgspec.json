@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj": {}
+    "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj": {}
   },
   "projects": {
-    "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj": {
+    "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj",
+        "projectUniqueName": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj",
         "projectName": "TeamsMeetingAssistant.Core",
-        "projectPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj",
+        "projectPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj",
         "packagesPath": "C:\\Users\\kruz7\\.nuget\\packages\\",
-        "outputPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\obj\\",
+        "outputPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -45,7 +45,7 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "9.0.300"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net8.0": {
@@ -66,18 +66,18 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.306/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj": {
+    "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
+        "projectUniqueName": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
         "projectName": "TeamsMeetingAssistant.Infrastructure",
-        "projectPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
+        "projectPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\TeamsMeetingAssistant.Infrastructure.csproj",
         "packagesPath": "C:\\Users\\kruz7\\.nuget\\packages\\",
-        "outputPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\obj\\",
+        "outputPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -99,8 +99,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj": {
-                "projectPath": "C:\\temp\\Prototype\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj"
+              "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj": {
+                "projectPath": "C:\\Users\\kruz7\\OneDrive\\Documents\\Code Repos\\MCKRUZ\\TeamsBuddy\\TeamsMeetingAssistant\\src\\TeamsMeetingAssistant.Core\\TeamsMeetingAssistant.Core.csproj"
               }
             }
           }
@@ -115,7 +115,7 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "9.0.300"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net8.0": {
@@ -123,13 +123,25 @@
           "dependencies": {
             "Azure.AI.OpenAI": {
               "target": "Package",
-              "version": "[1.0.0, )"
+              "version": "[2.0.0, )"
+            },
+            "Azure.AI.OpenAI.Assistants": {
+              "target": "Package",
+              "version": "[1.0.0-beta.4, )"
             },
             "Azure.Identity": {
               "target": "Package",
               "version": "[1.17.0, )"
             },
+            "Azure.Search.Documents": {
+              "target": "Package",
+              "version": "[11.7.0, )"
+            },
             "Microsoft.AspNetCore.SignalR.Client": {
+              "target": "Package",
+              "version": "[9.0.10, )"
+            },
+            "Microsoft.Extensions.Configuration.Abstractions": {
               "target": "Package",
               "version": "[9.0.10, )"
             },
@@ -162,7 +174,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.306/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

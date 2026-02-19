@@ -244,6 +244,39 @@ public record QuestionSuggestion(
 }
 ```
 
+## 🎙️ Enabling Transcription for Testing
+
+TeamsBuddy requires meeting transcription to be active in order to receive transcript data from the Graph API. No Copilot license is needed — standard Microsoft 365 is sufficient.
+
+### How to Start Transcription (Per Meeting)
+
+During a Teams meeting:
+
+1. Click **More (...)** in the meeting toolbar
+2. Select **Start transcription**
+3. Confirm if prompted — transcription begins immediately
+
+> The meeting organizer must start transcription. Once started, transcript segments will appear in the Graph API within ~30–60 seconds and the polling service will begin processing them.
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| Microsoft 365 license | Business Basic or higher |
+| Teams transcription setting | Must be enabled by Teams admin (`Teams Admin Centre → Meetings → Meeting policies → Recording & transcription → Transcription → On`) |
+| Meeting organizer | Must manually click "Start transcription" each session |
+| Microsoft Copilot for Teams | **Not required** |
+
+### Getting the Meeting ID
+
+The app requires the internal Graph API meeting ID (not the join URL). To get it:
+
+1. Create a meeting via Graph Explorer or the Calendar API and capture the ID at creation
+2. Or: query `GET /me/onlineMeetings` after creating a meeting to find its `id`
+3. Pass this ID to `POST /api/meeting/start` when beginning monitoring
+
+---
+
 ## 🧪 Testing the Prototype
 
 ### 1. Start the API
