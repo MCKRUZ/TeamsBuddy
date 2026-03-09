@@ -1,20 +1,45 @@
 <div class="flex flex-column gap-2">
-  <label for="meetingId" class="font-semibold text-sm">Meeting ID</label>
+  <label for="userEmail" class="font-semibold text-sm">Organizer Email</label>
   <input
     pInputText
-    id="meetingId"
-    [(ngModel)]="meetingId"
-    placeholder="e.g. MSTeams meeting ID"
+    id="userEmail"
+    [(ngModel)]="userEmail"
+    placeholder="e.g. AdeleV@mtvy.onmicrosoft.com"
     [disabled]="state.isMonitoring()"
     class="w-full" />
 
+  <label for="joinUrl" class="font-semibold text-sm">Teams Join URL</label>
+  <input
+    pInputText
+    id="joinUrl"
+    [(ngModel)]="joinUrl"
+    placeholder="Paste Teams meeting join link"
+    [disabled]="state.isMonitoring()"
+    class="w-full" />
+
+  <p-button
+    label="Lookup Meeting"
+    icon="pi pi-search"
+    (onClick)="lookup()"
+    [loading]="lookingUp()"
+    [disabled]="state.isMonitoring() || !joinUrl() || !userEmail()"
+    severity="info"
+    class="w-full" />
+
+  @if (resolvedMeetingId()) {
+    <div class="flex align-items-center gap-2 p-2 border-round surface-100">
+      <i class="pi pi-check-circle text-green-500"></i>
+      <span class="text-sm">Meeting ID resolved</span>
+    </div>
+  }
+
   <div class="flex gap-2">
     <p-button
-      label="Start"
+      label="Start Monitoring"
       icon="pi pi-play"
       (onClick)="start()"
       [loading]="loading()"
-      [disabled]="state.isMonitoring()"
+      [disabled]="state.isMonitoring() || !resolvedMeetingId()"
       severity="success"
       class="flex-1" />
     <p-button

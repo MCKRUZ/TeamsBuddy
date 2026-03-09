@@ -54,6 +54,29 @@ public class GraphTranscriptService : ITranscriptService
             .Build();
     }
 
+    public async Task<string?> LookupMeetingIdByJoinUrlAsync(
+        string userEmail, string joinUrl, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Looking up meeting by join URL for user {User}", userEmail);
+
+        var meetings = await _retryPipeline.ExecuteAsync(async ct =>
+            await _graphClient.Users[userEmail].OnlineMeetings
+                .GetAsync(config =>
+                {
+                    config.QueryParameters.Filter = $"JoinWebUrl eq '{joinUrl}'";
+                }, ct), cancellationToken);
+
+        var meeting = meetings?.Value?.FirstOrDefault();
+        if (meeting?.Id == null)
+        {
+            _logger.LogWarning("No meeting found for join URL");
+            return null;
+        }
+
+        _logger.LogInformation("Resolved meeting ID: {MeetingId}", meeting.Id);
+        return meeting.Id;
+    }
+
     public async Task<IEnumerable<TranscriptSegment>> GetNewTranscriptSegmentsAsync(
         string meetingId, DateTimeOffset since, CancellationToken cancellationToken)
     {

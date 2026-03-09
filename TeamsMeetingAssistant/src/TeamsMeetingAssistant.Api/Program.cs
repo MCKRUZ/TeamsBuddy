@@ -74,7 +74,8 @@ builder.Services.AddScoped<ISignalRService, TeamsMeetingAssistant.Api.SignalRHub
 
 // Add background services
 builder.Services.AddHostedService<TeamsMeetingAssistant.Api.TranscriptPollingService>();
-builder.Services.AddHostedService<TeamsMeetingAssistant.Api.SubscriptionRenewalService>();
+builder.Services.AddSingleton<TeamsMeetingAssistant.Api.SubscriptionRenewalService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TeamsMeetingAssistant.Api.SubscriptionRenewalService>());
 
 // Add basic health checks
 builder.Services.AddHealthChecks()

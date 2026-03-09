@@ -19,13 +19,13 @@ public class MeetingController : ControllerBase
         ITranscriptService transcriptService,
         IMeetingDocumentService documentService,
         ILogger<MeetingController> logger,
-        IHostedService renewalService)
+        SubscriptionRenewalService renewalService)
     {
         _sessionStore = sessionStore;
         _transcriptService = transcriptService;
         _documentService = documentService;
         _logger = logger;
-        _renewalService = (SubscriptionRenewalService)renewalService;
+        _renewalService = renewalService;
     }
 
     /// <summary>
@@ -99,6 +99,33 @@ public class MeetingController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to start monitoring meeting {MeetingId}", meetingId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("lookup")]
+    public async Task<IActionResult> LookupMeeting(
+        [FromBody] LookupMeetingRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.UserEmail) || string.IsNullOrWhiteSpace(request.JoinUrl))
+                return BadRequest(new { error = "userEmail and joinUrl are required" });
+
+            _logger.LogInformation("Looking up meeting for {User} with join URL", request.UserEmail);
+
+            var meetingId = await _transcriptService.LookupMeetingIdByJoinUrlAsync(
+                request.UserEmail, request.JoinUrl, cancellationToken);
+
+            if (meetingId == null)
+                return NotFound(new { error = "No meeting found for this join URL. Make sure the user email matches the meeting organizer." });
+
+            return Ok(new { meetingId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to lookup meeting");
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -210,3 +237,4 @@ public class MeetingController : ControllerBase
 }
 
 public record StopMonitoringRequest(string MeetingId);
+public record LookupMeetingRequest(string UserEmail, string JoinUrl);

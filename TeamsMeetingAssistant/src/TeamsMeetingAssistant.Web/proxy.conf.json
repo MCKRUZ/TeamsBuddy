@@ -1,11 +1,11 @@
 {
   "/api": {
-    "target": "https://localhost:7001",
+    "target": "http://localhost:5211",
     "secure": false,
     "changeOrigin": true
   },
   "/transcripthub": {
-    "target": "https://localhost:7001",
+    "target": "http://localhost:5211",
     "secure": false,
     "ws": true,
     "changeOrigin": true

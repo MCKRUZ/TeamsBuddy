@@ -24,12 +24,12 @@ export class SignalRService implements OnDestroy {
       .withAutomaticReconnect()
       .build();
 
-    this.connection.on('ReceiveTranscriptUpdate', (segments: TranscriptSegment[]) => {
-      this.state.appendTranscriptSegments(segments);
-      this.transcriptUpdate$.next(segments);
+    this.connection.on('NewTranscript', (segment: TranscriptSegment) => {
+      this.state.appendTranscriptSegments([segment]);
+      this.transcriptUpdate$.next([segment]);
     });
 
-    this.connection.on('ReceiveQuestionSuggestions', (questions: QuestionSuggestion[]) => {
+    this.connection.on('QuestionSuggestions', (questions: QuestionSuggestion[]) => {
       this.state.setQuestions(questions);
       this.questionSuggestions$.next(questions);
     });

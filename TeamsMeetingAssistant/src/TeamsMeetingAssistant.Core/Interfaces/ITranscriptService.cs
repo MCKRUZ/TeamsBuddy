@@ -4,6 +4,7 @@ public interface ITranscriptService
 {
     Task<IEnumerable<TranscriptSegment>> GetNewTranscriptSegmentsAsync(string meetingId, DateTimeOffset since, CancellationToken cancellationToken);
     Task<MeetingSession> GetMeetingInfoAsync(string meetingId, CancellationToken cancellationToken);
+    Task<string?> LookupMeetingIdByJoinUrlAsync(string userEmail, string joinUrl, CancellationToken cancellationToken);
     Task<Subscription> SubscribeToTranscriptChangesAsync(string meetingId, string webhookUrl, CancellationToken cancellationToken);
     Task RenewSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken);
     Task UnsubscribeAsync(string subscriptionId, CancellationToken cancellationToken);

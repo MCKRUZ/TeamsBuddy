@@ -46,6 +46,13 @@ public class MockGraphTranscriptService : ITranscriptService
         return mockSegments;
     }
 
+    public async Task<string?> LookupMeetingIdByJoinUrlAsync(string userEmail, string joinUrl, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("MOCK: Looking up meeting by join URL for user {User}", userEmail);
+        await Task.Delay(50, cancellationToken);
+        return $"mock-meeting-{Guid.NewGuid():N}";
+    }
+
     public async Task<MeetingSession> GetMeetingInfoAsync(string meetingId, CancellationToken cancellationToken)
     {
         _logger.LogInformation("MOCK: Getting meeting info for {MeetingId}", meetingId);

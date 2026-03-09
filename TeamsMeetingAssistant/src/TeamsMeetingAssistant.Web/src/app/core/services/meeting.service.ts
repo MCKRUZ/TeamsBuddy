@@ -9,8 +9,14 @@ export class MeetingService {
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiUrl}/api/meeting`;
 
+  lookupMeeting(userEmail: string, joinUrl: string): Observable<{ meetingId: string }> {
+    return this.http.post<{ meetingId: string }>(`${this.base}/lookup`, { userEmail, joinUrl });
+  }
+
   startMonitoring(meetingId: string): Observable<MeetingSession> {
-    return this.http.post<MeetingSession>(`${this.base}/start`, { meetingId });
+    const formData = new FormData();
+    formData.append('meetingId', meetingId);
+    return this.http.post<MeetingSession>(`${this.base}/start`, formData);
   }
 
   stopMonitoring(meetingId: string): Observable<void> {
